@@ -1,0 +1,56 @@
+/** 
+ * @(#)AdvertiserRepository.java 1.0.0 2016年7月25日 下午4:47:40  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.repositories;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.slfinance.redpack.core.entities.Advertiser;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.extend.jpa.page.QueryExtend;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 下午4:47:40 $
+ */
+public interface AdvertiserRepository extends BaseRepository<Advertiser> {
+
+	/**
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午2:11:03
+	 * @param status
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select * from rp_t_advertiser t where (t.status in ( :status)) ")
+	List<Advertiser> findAll2Select(@Param("status") List<String> status);
+
+	/**
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午2:11:11
+	 * @param pageRequest
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select * from rp_t_advertiser t where ?(t.status = :status)? and ?(t.name like :name ||'%')? and ?(trunc(t.created_date)) >= to_date( :startCreatedDate , 'yyyy-mm-dd')? and ?(trunc(t.created_date)) <= to_date( :endCreatedDate , 'yyyy-mm-dd')? order by t.created_date desc")
+	public PageResponse<Advertiser> findAllPage(PageRequestVo pageRequest);
+
+	/**
+	 * 根据广告主姓名查询广告主
+	 * @author taoxm
+	 * @createTime 2016年8月25日 下午1:31:37
+	 * @param name
+	 * @return
+	 */
+	public List<Advertiser> findByName(String name);
+}

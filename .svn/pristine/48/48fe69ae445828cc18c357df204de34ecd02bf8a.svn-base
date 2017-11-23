@@ -1,0 +1,172 @@
+/** 
+ * @(#)LocalSmsServiceImpl.java 1.0.0 2016年8月11日 下午2:21:09  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.sms.impl;
+
+import java.net.URLEncoder;
+import java.util.Date;
+import java.util.List;
+
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.slfinance.redpack.core.configs.SMSClientConfig;
+import com.slfinance.redpack.core.constants.enums.SMSContentTemplate;
+import com.slfinance.redpack.core.constants.enums.SmsMessageReturnStatus;
+import com.slfinance.redpack.core.entities.SMSMessage;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.services.SMSMessageService;
+import com.slfinance.redpack.core.sms.ISmsService;
+import com.slfinance.redpack.core.utils.HttpClientUtils;
+import com.slfinance.redpack.core.vo.Returnsms;
+
+/**
+ * 短信同步异步发送实现类
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年8月11日 下午2:21:09 $
+ */
+public class LocalSmsServiceImpl implements ISmsService {
+
+	private @Autowired SMSClientConfig config;
+	private @Autowired SMSMessageService smsMessageService;
+
+	private Logger logger = LoggerFactory.getLogger(this.getClass());
+
+	@Override
+	public void syncSend(String phone, String content, SMSContentTemplate contentTemplate) throws SLException {
+		sendAndSaveSMS(phone, content, contentTemplate);
+	}
+
+	@Override
+	public void asyncSend(String phone, String content, SMSContentTemplate contentTemplate) throws SLException {
+		sendAndSaveSMS(phone, content, contentTemplate);
+	}
+
+	@Override
+	public void syncBatchSend(List<String> phones, String content, SMSContentTemplate contentTemplate) throws SLException {
+		for (String phone : phones) {
+			sendAndSaveSMS(phone, content, contentTemplate);
+		}
+	}
+
+	@Override
+	public void asyncBatchSend(List<String> phones, String content, SMSContentTemplate contentTemplate) throws SLException {
+		for (String phone : phones) {
+			sendAndSaveSMS(phone, content, contentTemplate);
+		}
+	}
+
+	/**
+	 * 发送短信
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月12日 下午2:22:57
+	 * @param phone
+	 *            发送目标手机号
+	 * @param businessType
+	 *            发送短信类型。 例如： 登录注册、找回密码
+	 * @param contentTemplate
+	 *            短信内容模板。例如：验证类短信或推广类短信
+	 * @throws SLException
+	 */
+	private Returnsms sendSms(String phone, String message, SMSContentTemplate contentTemplate) throws SLException {
+
+		try {
+			String user = StringUtils.EMPTY;
+			String pwd = StringUtils.EMPTY;
+			if (contentTemplate.equals(SMSContentTemplate.验证)) {
+				user = config.getUser1();
+				pwd = config.getPwd1();
+			}
+			if (contentTemplate.equals(SMSContentTemplate.推广)) {
+				user = config.getUser2();
+				pwd = config.getPwd2();
+			}
+			String url = config.getServerUrl() + "?phone=" + phone + "&message=" + URLEncoder.encode(message, "GB2312") + "&user=" + user + "&pwd=" + pwd;
+			String result = StringUtils.EMPTY;
+			// 如果短信发送成功，则返回格式为：OK;63631d1-60f7-4de1-9e7b-579c318 的字符串
+			result = HttpClientUtils.getRequest(url);
+			Returnsms returnsms = stringToBean(result);
+			if (SmsMessageReturnStatus.OK.equals(returnsms.getReturnstatus())) {
+				return returnsms;
+			} else {
+				throw resultSMSException(result,returnsms);
+			}
+		} catch (Exception e) {
+			logger.error("发送短信失败", e);
+			throw new SLException("100003", "Send SMS have error");
+		}
+	}
+	
+	/**
+	 * 封装短信接口发送异常翻译
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年9月2日 下午5:07:28
+	 * @param result
+	 * @param returnsms
+	 * 
+	 *            <pre>
+	 * 如果短信发送成功，则返回格式为：OK;63631d1-60f7-4de1-9e7b-579c318 的字符串
+	 * OK; ******		接收正常，其中******代码发送编号taskid
+	 * ERR;******		接收错误，其中******代表出错的代码 
+	 *  000000		表示鉴权失败(IP鉴权失败，用户名和密码不符，下发短信内容不符等)
+	 *  000001		一次提交的号码大于20个
+	 *  000002		提交的号码中有不规范的号码
+	 *  000003           提交内容长度过长
+	 *  000004      用户余额不足
+	 *  000005 xxxxx 存在屏蔽字屏蔽字为xxxxx
+	 *  000006      提交的号码在30分钟内相同内容发送超过3次
+	 *  000007      黑名单
+	 *  000008      屏蔽
+	 *            </pre>
+	 * 
+	 * @return
+	 */
+	private Exception resultSMSException(String result, Returnsms returnsms) {
+		if ("000000".equals(returnsms.getTaskID())) {
+			return new Exception(result + "表示鉴权失败(IP鉴权失败，用户名和密码不符，下发短信内容不符等)");
+		} else if ("000001".equals(returnsms.getTaskID())) {
+			return new Exception(result + "一次提交的号码大于20个");
+		} else if ("000002".equals(returnsms.getTaskID())) {
+			return new Exception(result + "提交的号码中有不规范的号码");
+		} else if ("000003".equals(returnsms.getTaskID())) {
+			return new Exception(result + "提交内容长度过长");
+		} else if ("000004".equals(returnsms.getTaskID())) {
+			return new Exception(result + "用户余额不足");
+		} else if ("000005".equals(returnsms.getTaskID().substring(0, 5))) {
+			return new Exception(result + "存在屏蔽字屏蔽字为" + result.substring(10));
+		} else if ("000006".equals(returnsms.getTaskID())) {
+			return new Exception(result + "提交的号码在30分钟内相同内容发送超过3次");
+		} else if ("000007".equals(returnsms.getTaskID())) {
+			return new Exception(result + "黑名单");
+		} else if ("000008".equals(returnsms.getTaskID())) {
+			return new Exception(result + "屏蔽");
+		} else {
+			return new Exception(result+"未知错误码请联系短信供应商");
+		}
+	}
+
+	private static Returnsms stringToBean(String result) throws SLException {
+		String arr[] = result.split(";");
+		Returnsms returnsms = new Returnsms();
+		returnsms.setReturnstatus(SmsMessageReturnStatus.valueOf(arr[0]));
+		returnsms.setTaskID(arr[1]);
+		return returnsms;
+	}
+
+	private void sendAndSaveSMS(String phone, String content, SMSContentTemplate contentTemplate) throws SLException {
+		saveReturnsms(phone, content, new Date(), sendSms(phone, content, contentTemplate));
+	}
+
+	private void saveReturnsms(String phone, String content, Date sendTime, Returnsms sms) {
+		SMSMessage smsMessage = new SMSMessage(phone, content, sendTime, StringUtils.EMPTY, sms.getReturnstatus(), sms.getMessage(), sms.getTaskID(), sms.getSuccessCounts(), new Date(), StringUtils.EMPTY);
+		smsMessageService.save(smsMessage);
+	}
+}

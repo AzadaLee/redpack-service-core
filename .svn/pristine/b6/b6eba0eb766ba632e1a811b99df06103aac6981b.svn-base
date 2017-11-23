@@ -1,0 +1,241 @@
+/** 
+ * @(#)RedpackRepository.java 1.0.0 2016年7月25日 下午4:51:38  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.repositories;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.slfinance.redpack.core.constants.enums.RedpackStatus;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.extend.jpa.page.QueryExtend;
+import com.slfinance.redpack.core.extend.jpa.page.ReturnMapping;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+import com.slfinance.redpack.core.vo.RedPackExportExcelVo;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 下午4:51:38 $
+ */
+public interface RedPackRepository extends BaseRepository<RedPack> {
+
+	/**
+	 * 红包列表查询
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午1:47:41
+	 * @param pageRequest
+	 * @return
+	 * 
+	 */
+	@QueryExtend({@ReturnMapping(from="NAME",to="advertiserName")})
+	@Query(nativeQuery=true,value="select r.id, r.redpack_code, r.amount, to_char(r.time_point, 'yyyy-mm-dd') day_point, to_char(r.time_point, 'hh24:mi') time_point, r.shibboleth, r.status, r.title, b.name, a.content from rp_t_redpack r left join rp_t_advertisement a on a.id = r.advertisement_id left join rp_t_advertiser b on b.id = a.advertiser_id where ?(b.name like :advertiserName ||'%')? and ?(r.status = :status)? and ?(a.advertisement_code = :advertisementCode)? and ?(r.shibboleth like :shibboleth ||'%')? and ?(r.title like :title ||'%')? and ?(r.amount >= :minAmount )? and ?(r.amount <= :maxAmount )? and ?(trunc(r.time_point)) >= to_date( :startTimePoint , 'yyyy-mm-dd')? and ?(trunc(r.time_point)) <= to_date( :endTimePoint , 'yyyy-mm-dd')? order by r.time_point desc ")
+	public PageResponse<Map<String, Object>> findAllPage(PageRequestVo pageRequest);
+
+	/**
+	 * 查询单个红包详情
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午1:47:55
+	 * @param id
+	 * @return
+	 * 
+	 */
+	@QueryExtend({@ReturnMapping(from="NAME",to="advertiserName")})
+	@Query(nativeQuery=true , value="select r.id, r.redpack_code, r.amount, r.shibboleth, r.status, r.title, r.total_person_time, to_char(r.time_point, 'yyyy-mm-dd') time_point_day, to_char(r.time_point, 'hh24:mi') time_point_time, b.name, b.logo, a.id advertisement_id, a.content,a.hyperlink, a.advertisement_code, a.created_date, nvl(a.hits_count,0) hits_count, nvl(a.shared_count,0) shared_count from rp_t_redpack r left join rp_t_advertisement a on a.id = r.advertisement_id left join rp_t_advertiser b on b.id = a.advertiser_id where r.id = :id ")
+	public Map<String, Object> findRedpackAndAdvertisementInfo(@Param("id")String id);
+	
+	/**
+	 * 统计红包个数
+	 * 
+	 *当天红包总数状态是：未开启, 正开启, 已开启
+	 *当天已经发送红包总数状态是： 正开启, 已开启
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午2:53:41
+	 * @param day
+	 * 		  日期
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select sum(big_count+small_count) as sumcount from rp_t_redpack where to_date ( to_char (time_point, 'yyyy-mm-dd'),'yyyy-mm-dd') = :day and status in (:status)")
+	Long todayRedpackCount(@Param("day")Date day,@Param("status")List<String> status);
+	
+	/**
+	 * 距离系统时间最近的正开启的红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午5:26:29
+	 * @param day 查询的日期
+	 * 			格式：2016-8-16 00:00:00
+	 * @param systemTime
+	 * 			 查询的时间
+	 * 			格式：2016-8-16 17:27:33
+	 * @param status
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select * from (select re.* ,rownum as rn from rp_t_redpack re where to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and re.status = :status and re.time_point <= :systemTime order by re.time_point desc) where rn =1")
+	RedPack findCloselyHaveOpening(@Param("day")Date day, @Param("systemTime")Date systemTime, @Param("status")String status);
+	
+	/**
+	 * 距离当天时间最近“正开启”的红包，例如系统时间11点。9点场次的红包由于某种原因是“正开启”状态没有变成“已开启”，则查询出的是9点场次的红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午5:26:29
+	 * @param day 查询的日期
+	 * 			格式：2016-8-16 00:00:00
+	 * @param systemTime
+	 * 			 查询的时间
+	 * 			格式：2016-8-16 17:27:33
+	 * @param status
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select * from (select re.* ,rownum as rn from rp_t_redpack re where to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and re.status = :status order by re.time_point asc) where rn =1")
+	RedPack findCloselyDayHaveOpening(@Param("day")Date day, @Param("status")String status);
+
+	/**
+	 * 距离系统时间最近的当天还没有开启的红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午5:26:29
+	 * @param day 查询的日期
+	 * 			格式：2016-8-16 00:00:00
+	 * @param systemTime
+	 * 			 查询的时间
+	 * 			格式：2016-8-16 17:27:33
+	 * @param status
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select * from (select rr.*,rownum as rn from (select * from rp_t_redpack re where to_date (to_char (re.time_point, 'yyyy-mm-dd'),'yyyy-mm-dd') = :day and re.status = :status and re.time_point > :systemTime order by re.time_point asc) rr) where rn = 1")
+	RedPack findCloselyHaveNotOpen(@Param("day")Date day, @Param("systemTime")Date systemTime, @Param("status")String status);
+
+	/**
+	 * 距离当天时间最近的还“未开启”的红包，例如系统时间11点。9点场次的红包由于某种原因是“未开启”状态，则查询出的是9点场次的红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午5:26:29
+	 * @param day 查询的日期
+	 * 			格式：2016-8-16 00:00:00
+	 * @param systemTime
+	 * 			 查询的时间
+	 * 			格式：2016-8-16 17:27:33
+	 * @param status
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select * from (select rr.*,rownum as rn from (select * from rp_t_redpack re where to_date (to_char (re.time_point, 'yyyy-mm-dd'),'yyyy-mm-dd') = :day and re.status = :status order by re.time_point asc) rr) where rn = 1")
+	RedPack findCloselyDayHaveNotOpen(@Param("day")Date day, @Param("status")String status);
+	
+	/**
+	 * 导出红包
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午1:47:16
+	 * @param redPackExportExcelVo
+	 * @return
+	 */
+	@QueryExtend()
+	@Query(nativeQuery=true,value="select r.id, r.redpack_code, r.amount, r.total_person_time, to_char(r.time_point, 'yyyy-mm-dd') time_point_day, to_char(r.time_point, 'hh24:mi') time_point_time, r.shibboleth, r.status, r.title, b.name, b.advertiser_code, a.content, a.advertisement_code from rp_t_redpack r left join rp_t_advertisement a on a.id = r.advertisement_id left join rp_t_advertiser b on b.id = a.advertiser_id where ?(b.name like :advertiserName ||'%')? and ?(r.status = :status)? and ?(a.advertisement_code = :advertisementCode)? and ?(r.shibboleth like :shibboleth ||'%')? and ?(r.title like :title ||'%')? and ?(r.amount >= :minAmount )? and ?(r.amount <= :maxAmount )? and ?(trunc(r.time_point)) >= to_date( :startTimePoint , 'yyyy-mm-dd')? and ?(trunc(r.time_point)) <= to_date( :endTimePoint , 'yyyy-mm-dd')? order by r.time_point desc ")
+	public List<Map<String, Object>> exportExcel(RedPackExportExcelVo redPackExportExcelVo);
+
+	
+	/**
+	 * app-红包里列表
+	 * 
+	 * 1.全部，无金额排序 a.正在开启，未开启时间正排序，b.未开启，时间正序，c.已开启，时间倒序
+	 * @param day
+	 * 			当天的红包
+	 * @param startTimePoint
+	 * 		    起始时间
+	 * @param endTimePoint
+	 * 			结束时间
+	 * @param startAmount
+	 * 			起始金额
+	 * @param endAmount
+	 * 	                  结束金额
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="with re as(select re.id,adver.logo,re.title,to_char(re.time_point,'hh24:mi')time_point,re.status,re.amount from RP_T_REDPACK re join RP_T_ADVERTISEMENT ad on re.advertisement_id=ad.id join RP_T_ADVERTISER adver on ad.advertiser_id=adver.id and to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and ?(re.time_point >= :startTimePoint )? and ?(re.time_point <= :endTimePoint )? and ?(re.amount >= :startAmount )? and ?(re.amount <= :endAmount )? and re.status in ('正开启', '未开启','已开启')) select * from ( select * from re where re.status='正开启'or re.status='未开启'order by re.time_point asc) union all select * from ( select * from re where re.status='已开启' order by re.time_point desc)")
+	PageResponse<Map<String, Object>> appRedpackAllDefaultSort(PageRequestVo pageRequest);
+	
+	/**
+	 * app,红包里列表，查询全部，金额正序
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="with re as(select re.id,adver.logo,re.title,to_char(re.time_point,'hh24:mi')time_point,re.status,re.amount from RP_T_REDPACK re join RP_T_ADVERTISEMENT ad on re.advertisement_id=ad.id join RP_T_ADVERTISER adver on ad.advertiser_id=adver.id and to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and ?(re.time_point >= :startTimePoint )? and ?(re.time_point <= :endTimePoint )? and ?(re.amount >= :startAmount )? and ?(re.amount <= :endAmount )? and re.status in ('正开启', '未开启','已开启'))  select *from re order by re.amount asc, re.time_point asc")
+	PageResponse<Map<String, Object>> appRedpackAllByAmountOrderAsc(PageRequestVo pageRequest);
+	
+	/**
+	 * app,红包里列表，查询全部，金额倒序
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="with re as(select re.id,adver.logo,re.title,to_char(re.time_point,'hh24:mi')time_point,re.status,re.amount from RP_T_REDPACK re join RP_T_ADVERTISEMENT ad on re.advertisement_id=ad.id join RP_T_ADVERTISER adver on ad.advertiser_id=adver.id and to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and ?(re.time_point >= :startTimePoint )? and ?(re.time_point <= :endTimePoint )? and ?(re.amount >= :startAmount )? and ?(re.amount <= :endAmount )? and re.status in ('正开启', '未开启','已开启'))  select *from re order by re.amount desc, re.time_point asc")
+	PageResponse<Map<String, Object>> appRedpackAllByAmountOrderDsc(PageRequestVo pageRequest);
+
+	/**
+	 * app,红包里列表，淘金，默认，正在开启放前，未开启放后，按照开启时间正序
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="with re as(select re.id,adver.logo,re.title,to_char(re.time_point,'hh24:mi')time_point,re.status,re.amount from RP_T_REDPACK re join RP_T_ADVERTISEMENT ad on re.advertisement_id=ad.id join RP_T_ADVERTISER adver on ad.advertiser_id=adver.id and to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and ?(re.time_point >= :startTimePoint )? and ?(re.time_point <= :endTimePoint )? and ?(re.amount >= :startAmount )? and ?(re.amount <= :endAmount )? and re.status in ('正开启', '未开启') )  select *from re order by re.time_point asc")
+	PageResponse<Map<String, Object>> appRedpackTaoJinByDefaultSort(PageRequestVo pageRequest);
+	
+	/**
+	 * app,红包里列表，淘金，金额正序
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="with re as(select re.id,adver.logo,re.title,to_char(re.time_point,'hh24:mi')time_point,re.status,re.amount from RP_T_REDPACK re join RP_T_ADVERTISEMENT ad on re.advertisement_id=ad.id join RP_T_ADVERTISER adver on ad.advertiser_id=adver.id and to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and ?(re.time_point >= :startTimePoint )? and ?(re.time_point <= :endTimePoint )? and ?(re.amount >= :startAmount )? and ?(re.amount <= :endAmount )? and re.status in ('正开启', '未开启') )  select *from re order by re.amount asc, re.time_point asc")
+	PageResponse<Map<String, Object>> appRedpackTaoJinByAmountOrderAsc(PageRequestVo pageRequest);
+	
+	/**
+	 * app,红包里列表，淘金，金额倒序
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="with re as(select re.id,adver.logo,re.title,to_char(re.time_point,'hh24:mi')time_point,re.status,re.amount from RP_T_REDPACK re join RP_T_ADVERTISEMENT ad on re.advertisement_id=ad.id join RP_T_ADVERTISER adver on ad.advertiser_id=adver.id and to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and ?(re.time_point >= :startTimePoint )? and ?(re.time_point <= :endTimePoint )? and ?(re.amount >= :startAmount )? and ?(re.amount <= :endAmount )? and re.status in ('正开启', '未开启') )  select *from re order by re.amount desc, re.time_point asc")
+	PageResponse<Map<String, Object>> appRedpackTaoJinByAmountOrderDsc(PageRequestVo pageRequest);
+
+	/**
+	 * app,红包里列表，捡漏，默认排序，开启时间倒序
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="with re as(select re.id,adver.logo,re.title,to_char(re.time_point,'hh24:mi')time_point,re.status,re.amount from RP_T_REDPACK re join RP_T_ADVERTISEMENT ad on re.advertisement_id=ad.id join RP_T_ADVERTISER adver on ad.advertiser_id=adver.id and to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and ?(re.time_point >= :startTimePoint )? and ?(re.time_point <= :endTimePoint )? and ?(re.amount >= :startAmount )? and ?(re.amount <= :endAmount )? and re.status = '已开启')  select *from re order by re.time_point desc")
+	PageResponse<Map<String, Object>> appRedpackJianlouByDefaultSort(PageRequestVo pageRequest);
+	
+	/**
+	 * app,红包里列表，捡漏，金额正序
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="with re as(select re.id,adver.logo,re.title,to_char(re.time_point,'hh24:mi')time_point,re.status,re.amount from RP_T_REDPACK re join RP_T_ADVERTISEMENT ad on re.advertisement_id=ad.id join RP_T_ADVERTISER adver on ad.advertiser_id=adver.id and to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and ?(re.time_point >= :startTimePoint )? and ?(re.time_point <= :endTimePoint )? and ?(re.amount >= :startAmount )? and ?(re.amount <= :endAmount )? and re.status = '已开启')  select *from re order by re.amount asc, re.time_point asc")
+	PageResponse<Map<String, Object>> appRedpackJianlouByAmountOrderAsc(PageRequestVo pageRequest);
+	
+	/**
+	 * app,红包里列表，捡漏，金额倒序
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="with re as(select re.id,adver.logo,re.title,to_char(re.time_point,'hh24:mi')time_point,re.status,re.amount from RP_T_REDPACK re join RP_T_ADVERTISEMENT ad on re.advertisement_id=ad.id join RP_T_ADVERTISER adver on ad.advertiser_id=adver.id and to_date(to_char(re.time_point,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and ?(re.time_point >= :startTimePoint )? and ?(re.time_point <= :endTimePoint )? and ?(re.amount >= :startAmount )? and ?(re.amount <= :endAmount )? and re.status = '已开启')  select *from re order by re.amount desc, re.time_point asc")
+	PageResponse<Map<String, Object>> appRedpackJianlouByAmountOrderDsc(PageRequestVo pageRequest);
+	
+	/**
+	 * app-我的红包预约列表
+	 * @author SangLy
+	 * @createTime 2016年8月19日 下午4:55:28
+	 * @param pageRequest
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select re.id,advers.logo,re.title, to_char(re.time_point,'hh24:mi')time_point ,re.status,re.amount from RP_T_CUSTOMER_RELATION cr join RP_T_REDPACK re on cr.relate_primary = re.id join  RP_T_ADVERTISEMENT ad on re.advertisement_id = ad.id join RP_T_ADVERTISER advers on ad.advertiser_id = advers.id and to_date(to_char(cr.created_date,'yyyy-MM-dd'),'yyyy-MM-dd') = :day and cr.customer_id = :customerId and cr.relate_table = :relateTable and cr.type = :type order by cr.created_date desc")
+	PageResponse<Map<String, Object>> appGetSubscription(PageRequestVo pageRequest);
+
+}

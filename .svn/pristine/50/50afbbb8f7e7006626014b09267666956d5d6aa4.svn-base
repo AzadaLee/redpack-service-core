@@ -1,0 +1,124 @@
+/** 
+ * @(#)AdvertiserService.java 1.0.0 2016年7月26日 上午9:50:43  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.core.constants.enums.AdvertisementStatus;
+import com.slfinance.redpack.core.constants.enums.AdvertiserStatus;
+import com.slfinance.redpack.core.entities.Advertisement;
+import com.slfinance.redpack.core.entities.Advertiser;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.repositories.AdvertiserRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+/**
+ * 广告主(打广告的人)
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月26日 上午9:50:43 $
+ */
+@Service
+public class AdvertiserService extends BaseService<Advertiser, AdvertiserRepository> {
+	
+	
+	@Autowired
+	private AdvertisementService advertisementService;
+
+	/**
+	 * 广告主列表查询
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午2:06:50
+	 * @param pageRequest
+	 * @return
+	 */
+	public PageResponse<Advertiser> findAllPage(PageRequestVo pageRequest) {
+		pageRequest.addParam("status", AdvertiserStatus.新建.name());
+		PageResponse<Advertiser> pageResponse = repository.findAllPage(pageRequest);
+		return pageResponse;
+	}
+
+	/**
+	 * 保存用户
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午2:10:28
+	 * @param advertiser
+	 * @return
+	 */
+	@Transactional
+	public Advertiser saveAdvertiser(Advertiser advertiser,boolean isSave) {
+		if(isSave){
+			//判断广告主的名字是否重复
+			List<Advertiser> advertisers = repository.findByName(advertiser.getName());
+			if(advertisers != null && advertisers.size() > 0){
+				throw new SLException("300006");
+			}
+		}
+		return repository.save(advertiser);
+	}
+
+	/**
+	 * 广告主修改
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午2:08:32
+	 * @param id
+	 * @return
+	 */
+	@Transactional
+	public Advertiser del(String id) {
+		Advertiser advertiser = repository.findOne(id);
+		//1、判断广告主是否存在
+		if (null == advertiser) {
+			logger.info("试图修改广告主id为{}的信息，但广告主不存在！", id);
+			throw new SLException("400003");
+		}
+		//2、判断该广告主是否还有广告正在投放，如果有广告正在投放，则不允许删除
+		List<Advertisement> advertisements = advertisementService.findByAdvertiserIdAndStatus(id,AdvertisementStatus.未下架);
+		if(advertisements != null && advertisements.size() > 0){
+			throw new SLException("300007");
+		}
+		advertiser.setStatus(AdvertiserStatus.删除);
+		return repository.save(advertiser);
+	}
+
+	/**
+	 * 获取所有广告主(作为下拉框数据使用)
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午2:09:13
+	 * @param status
+	 * @return
+	 */
+	public Map<String, Object> findAll2Select(List<String> status) {
+		Map<String, Object> result = new HashMap<String, Object>();
+		result.put("data", repository.findAll2Select(status));
+		return result;
+	}
+	
+	/**
+	 * 广告主id查找广告主
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月25日 下午7:51:48
+	 * @param customerId
+	 * @return
+	 */
+	public Advertiser findById(String advertiserId) {
+		return findOne(advertiserId);
+	}
+}

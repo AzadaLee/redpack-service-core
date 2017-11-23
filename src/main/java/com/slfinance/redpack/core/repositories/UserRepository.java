@@ -1,0 +1,59 @@
+/** 
+ * @(#)UserRepository.java 1.0.0 2016年7月25日 下午5:00:42  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.repositories;
+
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.data.jpa.repository.Query;
+
+import com.slfinance.redpack.core.entities.User;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.extend.jpa.page.QueryExtend;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 下午5:00:42 $
+ */
+public interface UserRepository extends BaseRepository<User> {
+
+	/**
+	 * 查询用户列表
+	 * @author taoxm
+	 * @createTime 2016年9月2日 下午6:29:53
+	 * @param pageRequest
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true,value="select t.id,t.status,t.login_name,t.mobile,t.email,t.name,u.name created_user from rp_t_user t left join rp_t_user u on t.created_user = u.id where ?(t.status = :status)? and ?(t.login_name like :loginName ||'%')? and ?(t.name like :name ||'%')? and ?(t.mobile = :mobile)? and ?(t.email = :email)? order by t.created_date desc ")
+	public PageResponse<Map<String, Object>> findAllUser(PageRequestVo pageRequest);
+
+	/**
+	 * 根据登录名查询用户列表
+	 * @author taoxm
+	 * @createTime 2016年9月5日 下午2:42:35
+	 * @param loginName
+	 * @return
+	 */
+	public List<User> findByLoginName(String loginName);
+
+	/**
+	 * 根据用户邮箱查询用户列表
+	 * @author taoxm
+	 * @createTime 2016年9月5日 下午2:49:33
+	 * @param email
+	 * @return
+	 */
+	public List<User> findByEmail(String email);
+
+	public List<User> findByMobile(String mobile);
+
+}

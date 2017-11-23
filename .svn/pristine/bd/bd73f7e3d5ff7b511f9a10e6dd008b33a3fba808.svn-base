@@ -1,0 +1,91 @@
+/** 
+ * @(#)ModifyRedPackStatusOpeningThread.java 1.0.0 2016年8月22日 下午5:16:34  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.thread;
+
+import java.util.Date;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.core.constants.RedPackConstant;
+import com.slfinance.redpack.core.constants.enums.LogType;
+import com.slfinance.redpack.core.constants.enums.RedpackStatus;
+import com.slfinance.redpack.core.constants.enums.UserType;
+import com.slfinance.redpack.core.entities.OperateLog;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.services.OperateLogService;
+import com.slfinance.redpack.core.services.RedPackService;
+
+/**
+ * 定时扫描，最近一条红包"未开启"状态的红包并且修改此红包状态为"正开启"
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年8月22日 下午5:16:34 $
+ */
+public class ModifyRedPackStatusNotOpenToOpeningThread extends Thread {
+
+	private final Log logger = LogFactory.getLog(ModifyRedPackStatusNotOpenToOpeningThread.class);
+
+	private RedPackService redpackService;
+
+	private OperateLogService operateLogService;
+
+	private Date systemTime = new Date();
+
+	private RedPack redpack = null;
+
+	public ModifyRedPackStatusNotOpenToOpeningThread(RedPackService redpackService, OperateLogService operateLogService) {
+		this.operateLogService = operateLogService;
+		this.redpackService = redpackService;
+		this.start();
+	}
+
+	@Override
+	public void run() {
+		while (true) {
+			try {
+				systemTime = new Date();
+				redpack = redpackService.findCloselyDayHaveNotOpen(systemTime); // 距离当天时间最近的还没有开启的红包，例如系统时间11点。9点场次的红包由于某种原因是“未开启”状态，则查询出的是9点场次的红包
+				if (redpack != null) {
+					// 红包的派送时间点在系统时间之前大于等于5分钟，直接改成“已开启”
+					if ((systemTime.getTime() - redpack.getTimePoint().getTime()) >= RedPackConstant.REDPACK_MODIFY_BEFORE_NOW_MINS * DateUtil.MINUTE_MILISECONDS) {
+						redpack.setStatus(RedpackStatus.已开启);
+						redpackService.update(redpack);
+						operateLogService.saveAsync(new OperateLog(UserType.robot, LogType.自动更改红包状态, redpack.getId(), null, new Date(), "由未开启状态直接更改为已开启状态"));
+					} else if (((redpack.getTimePoint().getTime() - systemTime.getTime()) > 0) && (redpack.getTimePoint().getTime() - systemTime.getTime()) <= RedPackConstant.REDPACK_MODIFY_BEFORE_NOW_MINS * DateUtil.MINUTE_MILISECONDS) {
+						// 红包的派送时间点在系统时间之后0-5分钟之内，计算休眠时间，并休眠提前2秒钟进入开启状态
+						if((redpack.getTimePoint().getTime() - systemTime.getTime() - RedPackConstant.REDPACK_OPENPOINT_BEFORE_NOW_SEC * 1000)>0){
+							sleep(redpack.getTimePoint().getTime() - systemTime.getTime() - RedPackConstant.REDPACK_OPENPOINT_BEFORE_NOW_SEC * 1000);
+						}
+					} else if ((redpack.getTimePoint().getTime() - systemTime.getTime()) > RedPackConstant.REDPACK_MODIFY_BEFORE_NOW_MINS * DateUtil.MINUTE_MILISECONDS) {
+						// 红包的派送时间点在系统时间之后5分钟之外，则休眠4分钟后做刷新
+						sleep(RedPackConstant.REDPACK_OPENPOINT_BEFORE_NOW_FRESH * DateUtil.MINUTE_MILISECONDS);
+					} else {
+						// 改成"正开启"，这里包括（红包的派送时间点在系统时间之前0~5分钟）和（红包的派送时间点刚好到点需要更改）两种情况
+						redpack.setStatus(RedpackStatus.正开启);
+						redpackService.update(redpack);
+						operateLogService.saveAsync(new OperateLog(UserType.robot, LogType.自动更改红包状态, redpack.getId(), null, new Date(), "由未开启状态更改为正开启状态"));
+					}
+				} else {
+					// 休眠4分钟后做刷新
+					sleep(RedPackConstant.REDPACK_OPENPOINT_BEFORE_NOW_FRESH * DateUtil.MINUTE_MILISECONDS);
+				}
+
+			} catch (Exception ex) {
+				try {
+					if (redpack != null) {
+						redpackService.update(redpack);
+						operateLogService.saveAsync(new OperateLog(UserType.robot, LogType.自动更改红包状态, redpack.getId(), null, new Date(), "更改红包状态"));
+					}
+				} catch (Exception e) {
+					logger.error("redpack update error", e);
+				}
+			}
+		}
+	}
+}

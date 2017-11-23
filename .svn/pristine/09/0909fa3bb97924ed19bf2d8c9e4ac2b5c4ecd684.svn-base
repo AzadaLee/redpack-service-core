@@ -1,0 +1,71 @@
+/** 
+ * @(#)CustomerRepository.java 1.0.0 2016年7月25日 下午4:48:49  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.repositories;
+
+import java.util.Map;
+
+import org.springframework.data.jpa.repository.Query;
+
+import com.slfinance.redpack.core.entities.Customer;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.extend.jpa.page.QueryExtend;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 下午4:48:49 $
+ */
+public interface CustomerRepository extends BaseRepository<Customer> {
+
+	/**
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月15日 下午2:34:09
+	 * @param mobile
+	 * @return
+	 */
+	Customer findByMobile(String mobile);
+	
+	
+	/**
+	 * 根据邀请码找用户
+	 * @author SangLy
+	 * @createTime 2016年8月15日 下午3:19:20
+	 * @param invitationCode
+	 * @return
+	 */
+	Customer findFirstByInvitationCode(String invitationCode);
+	
+	/**
+	 * 根据客户编号查询用户
+	 * @author SangLy
+	 * @createTime 2016年9月1日 下午1:11:30
+	 * @param customerCode
+	 * @return
+	 */
+	Customer findFirstByCustomerCode(String customerCode);
+
+	/**
+	 * app-查找我的邀请记录
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月19日 下午3:43:22
+	 * @param pageRequest
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select c.mobile, to_char(cr.created_date,'yy/MM/dd') as \"date\" from RP_T_CUSTOMER_RELATION cr join RP_T_CUSTOMER c on cr.relate_primary = c.id and cr.customer_id = :customerId and cr.relate_table = 'RP_T_CUSTOMER' and cr.type = :customerRelationType order by cr.created_date desc")
+	PageResponse<Map<String, Object>> appFindMyInvited(PageRequestVo pageRequest);
+
+
+	@QueryExtend
+	@Query(nativeQuery=true,value="select * from rp_t_customer t where ?(t.status = :status)? and ?(t.mobile = :mobile)? and ?(t.customer_code = :customerCode)? order by t.created_date desc")
+	public PageResponse<Customer> findAllCustomer(PageRequestVo pageRequest);
+}

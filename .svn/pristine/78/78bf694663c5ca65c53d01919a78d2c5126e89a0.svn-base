@@ -1,0 +1,36 @@
+/** 
+ * @(#)AdvertisementPhotoRepository.java 1.0.0 2016年7月25日 下午4:45:18  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.repositories;
+
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.slfinance.redpack.core.entities.AdvertisementPhoto;
+import com.slfinance.redpack.core.extend.jpa.page.QueryExtend;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 下午4:45:18 $
+ */
+public interface AdvertisementPhotoRepository extends BaseRepository<AdvertisementPhoto> {
+
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select p.path from rp_t_advertisement_photo p where p.advertisement_id = :advertisementId ")
+	public List<Map<String, Object>> findPathsByAdvertisementId(@Param("advertisementId") String advertisementId);
+
+	@Modifying
+	@Query(nativeQuery=true,value="delete from rp_t_advertisement_photo p where p.advertisement_id = :advertisementId")
+	public void deleteByAdvertisementId(@Param("advertisementId")String advertisementId);
+
+}

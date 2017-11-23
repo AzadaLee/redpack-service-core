@@ -1,0 +1,32 @@
+/** 
+ * @(#)DistributeServiceTest.java 1.0.0 2016年11月14日 下午2:20:35  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import org.junit.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.slfinance.redpack.core.ServiceCoreApplicationTests;
+import com.slfinance.redpack.core.entities.Distribute;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月14日 下午2:20:35 $
+ */
+public class DistributeServiceTest extends ServiceCoreApplicationTests {
+
+	@Autowired
+	private DistributeService distributeServic;
+
+	@Test
+	public void testRobRedPack() {
+		Distribute distribute = distributeServic.robRedPack("409083d158614c460158614e1b510010", "409083d1585616160158562354b80006");
+		System.out.println(distribute);
+	}
+
+}

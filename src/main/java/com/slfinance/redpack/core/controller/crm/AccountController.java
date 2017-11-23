@@ -1,0 +1,106 @@
+package com.slfinance.redpack.core.controller.crm;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.slfinance.redpack.common.utils.MapUtil;
+import com.slfinance.redpack.core.constants.enums.WithdrawStatus;
+import com.slfinance.redpack.core.controller.base.BaseController;
+import com.slfinance.redpack.core.entities.Account;
+import com.slfinance.redpack.core.extend.fastjson.Serialize;
+import com.slfinance.redpack.core.extend.fastjson.SerializeRule;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.validate.annotations.Rule;
+import com.slfinance.redpack.core.extend.validate.annotations.Rules;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.AccountService;
+import com.slfinance.redpack.core.vo.AccountFlowExportVo;
+
+@RestController("crmAccountController")
+@RequestMapping(method=RequestMethod.POST,value="/crm/account")
+public class AccountController extends BaseController{
+
+	@Autowired
+	private AccountService accountService;
+	
+	/**
+	 * 系统账户充值
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping(value="/systemRecharge")
+	@Rules({ @Rule(name = "amount", required = true, requiredMessage = "110001",min=0.00,minMessage="110013",decimals=2,decimalsMessage="小数位必须是两位"),@Rule(name = "memo", required = true, requiredMessage = "110002") })
+	public ResponseVo systemRecharge(@RequestBody Map<String, Object> params){
+		Double amount = MapUtil.getDouble(params, "amount");
+		String memo = MapUtil.getStringTrim(params, "memo");
+		accountService.systemRecharge(amount,memo);
+		return new ResponseVo();
+	}
+	
+	/**
+	 * 获取系统账户信息
+	 * @return
+	 */
+	@RequestMapping(value="/systemAccountInfo")
+	@Serialize({ @SerializeRule(clazz = Account.class, include = { "accountCode", "totalAmount", "availableAmount", "freezeAmount"})})
+	public ResponseVo systemAccountInfo(){
+		return ResponseVo.success(accountService.findSystemAccount());
+	}
+	
+	/**
+	 * 提现审核
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("/withdrawAudit")
+	@Rules({ @Rule(name = "ids", required = true, requiredMessage = "110004"),@Rule(name = "auditStatus", required = true, requiredMessage = "110005") })
+	public ResponseVo withdrawAudit(@RequestBody Map<String, Object> params){
+		@SuppressWarnings("unchecked")
+		List<String> ids = (List<String>) params.get("ids");
+		String memo = MapUtil.getStringTrim(params, "memo");
+		WithdrawStatus auditStatus = WithdrawStatus.valueOf(MapUtil.getStringTrim(params, "auditStatus"));
+		if(ids != null && ids.size() >0){
+			for(String id : ids){
+				accountService.withdrawAudit(id,memo,auditStatus);
+			}
+		}
+		return ResponseVo.success();
+	}
+	
+	/**
+	 * 提现审核列表
+	 * @param pageRequest
+	 * @return
+	 */
+	@RequestMapping("/withdrawList")
+	public ResponseVo withdrawList(PageRequestVo pageRequest){
+		return ResponseVo.success(accountService.withdrawList(pageRequest));
+	}
+	
+	/**
+	 * 流水列表
+	 * @param pageRequest
+	 * @return
+	 */
+	@RequestMapping("/flowList")
+	public ResponseVo flowList(PageRequestVo pageRequest){
+		return ResponseVo.success(accountService.flowList(pageRequest));
+	}
+	
+	@RequestMapping("/flowExport")
+	@Rules({ @Rule(name = "accountType", required = true, requiredMessage = "110010")})
+	public ResponseVo flowExport(@RequestBody @Validated AccountFlowExportVo accountFlowExportVo){
+		List<Map<String, Object>> data = accountService.flowExport(accountFlowExportVo, 3);
+		Map<String, Object> result = new HashMap<String, Object>();
+		result.put("data", data);
+		return ResponseVo.success(result);
+	}
+}

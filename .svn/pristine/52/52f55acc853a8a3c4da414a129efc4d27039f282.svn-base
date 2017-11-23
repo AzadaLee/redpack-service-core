@@ -1,0 +1,125 @@
+/**
+ * @(#)Advertisement.java 1.0.0 2016年7月25日 上午9:57:10
+ * <p/>
+ * Copyright © 2016 善林金融.  All rights reserved.
+ */
+
+package com.slfinance.redpack.core.entities;
+
+import java.util.Date;
+
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.Table;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import com.slfinance.redpack.core.constants.enums.AdType;
+import com.slfinance.redpack.core.constants.enums.AdvertisementRecordType;
+import com.slfinance.redpack.core.constants.enums.AdvertisementStatus;
+import com.slfinance.redpack.core.constants.enums.UserType;
+import com.slfinance.redpack.core.entities.base.BaseEntity;
+
+/**
+ * 广告表
+ *
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 上午9:57:10 $
+ */
+@Entity
+@Table(name = "RP_T_ADVERTISEMENT")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+public class Advertisement extends BaseEntity {
+
+	private static final long serialVersionUID = -5000000000000000001L;
+
+	/**
+	 * 广告主编号
+	 */
+	private String advertiserCode;
+	
+	/**
+	 * 广告主名称
+	 */
+	private String advertiserName;
+	
+	/**
+	 * 广告主logo
+	 */
+	private String logo;
+	
+	/**
+	 * 广告编码
+	 */
+	private String advertisementCode;
+	
+	/**
+	 * 广告类型
+	 */
+	@Enumerated(EnumType.STRING)
+	private AdType type;
+
+	/**
+	 * 广告标题
+	 */
+	private String title;
+
+	/**
+	 * 广告内容
+	 */
+	private String content;
+
+	/**
+	 * 使用开始时间
+	 */
+	private Date startDate;
+	/**
+	 * 使用结束时间
+	 */
+	private Date endDate;
+
+	/**
+	 * 正确答案
+	 */
+	private String correctAnswer;
+	
+	/**
+	 * 分享数
+	 */
+	private Integer sharedCount = 0;
+	
+	/**
+	 * 点击数
+	 */
+	private Integer hitsCount = 0;
+	
+	/**
+	 * 链接地址
+	 */
+	private String hyperlink;
+	
+	/**
+	 * 记录类型
+	 */
+	@Enumerated(EnumType.STRING)
+	private AdvertisementRecordType recordType = AdvertisementRecordType.正本;
+
+	/**
+	 * 广告状态
+	 */
+	@Enumerated(EnumType.STRING)
+	private AdvertisementStatus status = AdvertisementStatus.未下架;
+	
+	/**
+	 * 用户类型
+	 */
+	@Enumerated(EnumType.STRING)
+	private UserType userType = UserType.员工;
+	
+
+}

@@ -1,0 +1,77 @@
+/** 
+ * @(#)RedpackOrderNotPaySendMessageThread.java 1.0.0 2016年11月18日 下午2:01:30  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.thread;
+
+import java.util.Date;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.core.constants.RedpackRecordStatus;
+import com.slfinance.redpack.core.constants.enums.MessageTemplateMessageType;
+import com.slfinance.redpack.core.constants.enums.RedpackStatus;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.services.MessageService;
+import com.slfinance.redpack.core.services.RedPackService;
+
+/**
+ * 订单在失效前5分钟发送站内信
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月18日 下午2:01:30 $
+ */
+public class CustomerRedpackOrderNotPaySendMessageThread extends Thread {
+	private final Log logger = LogFactory.getLog(ModifyRedPackStatusNotOpenToOpeningThread.class);
+
+	private RedPackService redpackService;
+
+	private Date systemTime = new Date();
+
+	private MessageService messageService;
+
+	private RedPack redpack = null;
+
+	public CustomerRedpackOrderNotPaySendMessageThread(RedPackService redpackService, MessageService messageService) {
+		this.redpackService = redpackService;
+		this.messageService = messageService;
+		this.start();
+	}
+
+	@Override
+	public void run() {
+		while (true) {
+			try {
+				systemTime = new Date();
+				// 查询最近一条没有发送站内信的订单
+				redpack = redpackService.findCloselyHaveNotRemindMessageOfCustomerOrderOutOfTime(RedpackStatus.待付款,RedpackRecordStatus.正常);
+				if (redpack != null) {
+					if (redpack.getTimePoint().getTime() < systemTime.getTime()) {
+						// 订单生成25分钟还没有支付
+						if (DateUtil.addMinutes(redpack.getTimePoint(), 25).compareTo(systemTime) <= 0) {
+							// 发送站内信
+							messageService.sendMessage(MessageTemplateMessageType.未付款红包即将到期, redpack.getCreatedUser(), redpack.getId());
+						} else {
+							// 休眠
+							Thread.sleep(DateUtil.addMinutes(redpack.getTimePoint(), 25).getTime() - systemTime.getTime());
+						}
+					} else {
+						// 订单时间和系统时间不同步，休眠1分钟做刷新
+						Thread.sleep(1 * 60000);
+					}
+				} else {
+					// 没有"待付款5分钟前发站内信"订单，休眠1分钟做刷新
+					Thread.sleep(1 * 60000);
+				}
+
+			} catch (Exception e) {
+				logger.error("前台客户，红包状态为待付款5分钟前发站内信 error", e);
+			}
+		}
+	}
+
+}

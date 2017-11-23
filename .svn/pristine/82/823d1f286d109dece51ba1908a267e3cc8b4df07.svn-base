@@ -1,0 +1,43 @@
+/** 
+ * @(#)AdvertisementPhoto.java 1.0.0 2016年7月25日 上午10:26:11  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.entities;
+
+import javax.persistence.Entity;
+import javax.persistence.Table;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import com.slfinance.redpack.core.entities.base.BaseEntity;
+
+/**
+ * 广告图片
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 上午10:26:11 $
+ */
+@Entity
+@Table(name = "RP_T_ADVERTISEMENT_PHOTO")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+public class AdvertisementPhoto extends BaseEntity {
+
+	private static final long serialVersionUID = -5000000000000000002L;
+
+	/**
+	 * 广告ID
+	 */
+	private String advertisementId;
+
+	/**
+	 * 存储路径
+	 */
+	private String path;
+
+}

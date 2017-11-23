@@ -1,0 +1,8 @@
+package com.slfinance.redpack.core.constants.enums;
+
+/**
+ * 客户关联类型 Created by samson on 2016/8/12.
+ */
+public enum CustomerRelationType {
+	红包订阅, 广告分享, 好友邀请
+}

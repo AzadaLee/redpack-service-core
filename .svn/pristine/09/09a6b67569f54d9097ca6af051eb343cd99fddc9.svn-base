@@ -1,0 +1,49 @@
+/** 
+ * @(#)AdvertisementVo.java 1.0.0 2016年8月16日 上午11:59:05  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */ 
+
+package com.slfinance.redpack.core.vo;
+
+import java.util.List;
+import java.util.Map;
+
+import javax.validation.constraints.NotNull;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import org.hibernate.validator.constraints.NotBlank;
+
+/**   
+ * 
+ *  
+ * @author  taoxm
+ * @version $Revision:1.0.0, $Date: 2016年8月16日 上午11:59:05 $ 
+ */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class AdvertisementVo {
+	private String id;
+	
+	@NotBlank(message="500001")
+	private String type;
+	
+	@NotBlank(message="500002")
+	private String content;
+	
+	@NotNull(message="500003")
+	private List<Map<String, String>> advertisementPhoto;
+	
+	@NotBlank(message="500004")
+	private String advertiserId;
+	
+	private String startDate;
+
+	private String endDate;
+	
+	private String hyperlink;
+}

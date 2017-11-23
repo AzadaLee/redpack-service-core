@@ -1,0 +1,179 @@
+/** 
+ * @(#)RedPackController.java 1.0.0 2016年8月16日 下午3:24:24  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.controller.crm;
+
+import java.lang.reflect.InvocationTargetException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.collections.MapUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.common.utils.MapUtil;
+import com.slfinance.redpack.core.constants.enums.RedpackType;
+import com.slfinance.redpack.core.constants.enums.RedpackUserType;
+import com.slfinance.redpack.core.controller.base.BaseController;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.validate.annotations.Rule;
+import com.slfinance.redpack.core.extend.validate.annotations.Rules;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.FileService;
+import com.slfinance.redpack.core.services.RedPackService;
+import com.slfinance.redpack.core.vo.RedPackExportExcelVo;
+
+/**
+ * 
+ * 大后台红包controller
+ * 
+ * @author taoxm
+ * @version $Revision:1.0.0, $Date: 2016年8月16日 下午3:24:24 $
+ */
+
+@RestController("crmRedPackController")
+@RequestMapping(value = "/crm/redpack", method = RequestMethod.POST)
+public class RedPackController extends BaseController {
+
+	@Autowired
+	private RedPackService redpackService;
+
+	@Autowired
+	private FileService fileService;
+
+	/**
+	 * 修改红包状态
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午3:28:09
+	 * @return
+	 */
+	@RequestMapping("/updateStatus")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "600001"), @Rule(name = "status", required = true, requiredMessage = "600002") })
+	public ResponseVo updateStatus(@RequestBody Map<String, Object> params) {
+		String id = MapUtil.getStringTrim(params, "id");
+		String status = MapUtil.getStringTrim(params, "status");
+		redpackService.updateStatus(id, status);
+		return ResponseVo.success();
+	}
+
+	/**
+	 * 红包新建和保存
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午4:54:50
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("/create")
+	@Rules({ @Rule(name = "smallCount", required = true, requiredMessage = "600034",number=true,numberMessage="600035"), @Rule(name = "bigCount", required = true, requiredMessage = "600036",number=true,numberMessage="600037"), @Rule(name = "advertisementId", required = true, requiredMessage = "500008"), @Rule(name = "redpackType", required = true, requiredMessage = "600038"), @Rule(name = "smallAmount", required = true, requiredMessage = "600039"), @Rule(name = "bigAmount", required = true, requiredMessage = "600040")})
+	public ResponseVo save(@RequestBody Map<String, Object> params) {
+		boolean isSave = false;//是否为新建红包标志(默认为修改红包)
+		RedPack redpack = null;
+		if (StringUtils.isBlank(MapUtil.getString(params, "id"))) {
+			redpack = new RedPack();
+			isSave = true;
+		} else {
+			String id = MapUtil.getStringTrim(params, "id");
+			redpack = redpackService.findOne(id);
+			if(null == redpack){
+				throw new SLException("600003");
+			}
+		}
+		redpack.setSmallCount(MapUtil.getInteger(params, "smallCount"));
+		redpack.setSmallAmount(MapUtil.getDouble(params, "smallAmount"));
+		redpack.setBigCount(MapUtil.getInteger(params, "bigCount"));
+		redpack.setBigAmount(MapUtil.getDouble(params, "bigAmount"));
+		redpack.setRedpackType(RedpackType.valueOf(MapUtil.getStringTrim(params, "redpackType")));
+		redpack.setAdvertisementId(MapUtil.getStringTrim(params, "advertisementId"));
+		redpack.setUserType(RedpackUserType.后台);
+		redpack.setTimePoint(DateUtil.parseToDate(MapUtils.getString(params, "timePoint"), "yyyy-MM-dd"));
+		redpackService.saveRedPacket(redpack, MapUtil.getStringTrim(params, "advertisementId"),isSave,"1");
+		return ResponseVo.success();
+	}
+
+	/**
+	 * 查询红包列表
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午7:10:37
+	 * @param pageRequest
+	 * @return
+	 */
+	@RequestMapping("/findAllPage")
+	public ResponseVo findAllPage(PageRequestVo pageRequest) {
+		return ResponseVo.success(redpackService.findAllPage(pageRequest));
+	}
+
+	/**
+	 * 查找单个红包广告详情信息
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午7:12:36
+	 * @param params
+	 * @return
+	 * @throws Exception
+	 */
+	@RequestMapping("/findRedpackAndAdvertisementInfo")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "600001") })
+	public ResponseVo findRedpackAndAdvertisementInfo(@RequestBody Map<String, Object> params) throws Exception {
+		String id = MapUtil.getStringTrim(params, "id");
+		Map<String, Object> result = redpackService.findRedpackAndAdvertisementInfo(id);
+		return ResponseVo.success(fileService.doPathAndLogo(staticResourceProxyURI, result, null));
+	}
+
+	/**
+	 * 红包导出
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午8:11:38
+	 * @param params
+	 * @return
+	 * @throws InvocationTargetException
+	 * @throws IllegalAccessException
+	 */
+	@RequestMapping("/exportExcel")
+	public ResponseVo exportExcel(@RequestBody @Validated RedPackExportExcelVo redPackExportExcelVo) throws IllegalAccessException, InvocationTargetException {
+		List<Map<String, Object>> data = redpackService.exportExcel(redPackExportExcelVo, 3);
+		Map<String, Object> result = new HashMap<String, Object>();
+		result.put("data", data);
+		return ResponseVo.success(result);
+	}
+	
+	/**
+	 * 修改红包（只能修改红包的广告信息）
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("/update")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "600001"), @Rule(name = "advertisementId", required = true, requiredMessage = "500004")})
+	public ResponseVo update(@RequestBody Map<String, Object> params){
+		String id = MapUtil.getStringTrim(params, "id");
+		String advertisementId = MapUtil.getStringTrim(params, "advertisementId");
+		return ResponseVo.success(redpackService.updateRedPackAdvertisementInfoById(id,advertisementId));
+	}
+	
+	
+	@RequestMapping("/audit")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "600001"), @Rule(name = "auditStatus", required = true, requiredMessage = "600031")})
+	public ResponseVo audit(@RequestBody Map<String, Object> params){
+		String id = MapUtil.getStringTrim(params, "id");
+		String auditStatus = MapUtil.getStringTrim(params, "advertisementId");
+		String memo = MapUtil.getStringTrim(params, "memo");
+		redpackService.auditRedPackById(id,auditStatus,memo);
+		return ResponseVo.success();
+	}
+	
+}

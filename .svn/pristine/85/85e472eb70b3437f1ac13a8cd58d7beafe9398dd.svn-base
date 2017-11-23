@@ -1,0 +1,25 @@
+/** 
+ * @(#)DistributeRepository.java 1.0.0 2016年11月2日 上午11:30:27  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.repositories;
+
+import java.util.Date;
+
+import com.slfinance.redpack.core.entities.Distribute;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月2日 上午11:30:27 $
+ */
+public interface DistributeRepository extends BaseRepository<Distribute> {
+
+	// 根据红包id查询最近一条应未分配记录
+	Distribute findByAssigneeIsNullAndRedpackIdAndCreatedDateGreaterThanEqualOrderByOrderedAsc(String redpackId,Date createdDate);
+
+}

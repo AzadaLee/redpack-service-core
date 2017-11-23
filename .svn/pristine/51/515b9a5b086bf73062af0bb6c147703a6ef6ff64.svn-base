@@ -1,0 +1,16 @@
+package com.slfinance.redpack.core.repositories;
+
+import java.util.List;
+
+import com.slfinance.redpack.core.entities.FileRelation;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+
+public interface FileRelationRepository extends BaseRepository<FileRelation>{
+
+	/**
+	 * 
+	 * @param fileId
+	 * @return
+	 */
+	public List<FileRelation> findByFileId(String fileId);
+}

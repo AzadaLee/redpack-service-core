@@ -1,0 +1,106 @@
+package com.slfinance.redpack.core.services;
+
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.common.utils.MapUtil;
+import com.slfinance.redpack.core.constants.enums.FileType;
+import com.slfinance.redpack.core.constants.enums.UserType;
+import com.slfinance.redpack.core.entities.File;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.repositories.FileRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+import com.slfinance.redpack.core.vo.FileUploadVo;
+
+@Service
+public class FileService extends BaseService<File, FileRepository>{
+
+	@Autowired
+	private FileUploadService fileUploadService;
+	
+	/**
+	 * 根据关联表和关联主键查询文件信息
+	 * @param relateTable
+	 * @param relatePrimary
+	 * @return
+	 */
+	public List<Map<String, Object>> findByRelateTableAndRelatePrimary(String relateTable,String relatePrimary){
+		List<Map<String, Object>> result = repository.findByRelateTableAndRelatePrimary(relateTable, relatePrimary);
+		return result;
+	}
+
+	/**
+	 * 附件上传
+	 * @param fileUploadVo
+	 * @return
+	 * @throws Exception 
+	 */
+	@Transactional
+	public File save(FileUploadVo fileUploadVo) {
+		String fileName = fileUploadVo.getFileName();//原始文件名
+		String fileType = fileUploadVo.getFileType();//文件类型
+		String file = fileUploadVo.getFile();//文件流（Base64编码）
+		String extensionName = fileUploadVo.getExtensionName();//文件扩展名
+		byte[] b=file.getBytes();
+        Base64 base64=new Base64();
+        b=base64.decode(b);
+        String path = null;
+        try {
+			path = fileUploadService.uploadFile(extensionName, b);
+		} catch (Exception e) {
+			throw new SLException("900007");
+		}
+        File fileF = new File();
+        fileF.setFileName(fileName);
+        fileF.setFileType(FileType.valueOf(fileType));
+        fileF.setPath(path);
+        fileF.setUserType(UserType.员工);
+		return save(fileF);
+	}
+	
+	/**
+	 * 添加url处理
+	 * @param url
+	 * @param map
+	 * @param file
+	 * @return
+	 */
+	public Object doPathAndLogo(String url,Map<String, Object> map,File file){
+		if(map != null){
+			//给logo添加url
+			String logo = MapUtil.getStringTrim(map, "logo");
+			if(null != logo && StringUtils.isBlank(logo)){
+				map.put("logoURL", url+"/"+logo);
+			}
+			//给path添加url
+			@SuppressWarnings("unchecked")
+			List<Map<String, Object>> files = (List<Map<String, Object>>) map.get("files");
+			if(null != files && files.size()>0){
+				String path = null;
+				for(Map<String, Object> temp : files){
+					path = MapUtil.getStringTrim(temp, "path");
+					if(null != path && StringUtils.isBlank(path)){
+						temp.put("pathURL", url+"/"+path);
+					}
+				}
+			}
+			return map;
+		}
+		
+		if(file != null){
+			String path = file.getPath();
+			if(null != path && StringUtils.isBlank(path)){
+				file.setPath(url+"/"+path);
+			}
+			return file;
+		}
+		return null;
+	}
+	
+}

@@ -1,0 +1,210 @@
+package com.slfinance.redpack.core.services;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.core.constants.enums.AccountFlowTradeDirection;
+import com.slfinance.redpack.core.constants.enums.AccountFlowflowType;
+import com.slfinance.redpack.core.constants.enums.CustomerStatus;
+import com.slfinance.redpack.core.constants.enums.WithdrawStatus;
+import com.slfinance.redpack.core.entities.Account;
+import com.slfinance.redpack.core.entities.AccountFlow;
+import com.slfinance.redpack.core.entities.Customer;
+import com.slfinance.redpack.core.entities.Withdraw;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.repositories.AccountRepository;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.base.BaseService;
+import com.slfinance.redpack.core.utils.SpringUtils;
+import com.slfinance.redpack.core.vo.AccountFlowExportVo;
+
+@Service
+public class AccountService extends BaseService<Account, AccountRepository>{
+	
+	@Autowired
+	private CodeGeneratorService codeGeneratorService;
+	
+	@Autowired
+	private AccountFlowService accountFlowService;
+	
+	@Autowired
+	private WithdrawService withdrawService;
+
+	@Autowired
+	private CustomerService customerService;
+	
+	/**
+	 * 系统账户充值
+	 * @param amount
+	 * @param memo
+	 * @return
+	 */
+	@Transactional(rollbackFor=SLException.class)
+	public Account systemRecharge(Double amount, String memo) {
+		String admin = "1";
+		Account account = repository.findByCustomerId(admin);
+		if(null == account){
+			throw new SLException("110003");
+		}
+		account.setTotalAmount(account.getTotalAmount()+amount);
+		account.setAvailableAmount(account.getAvailableAmount()+amount);
+		//记录流水
+		AccountFlow accountFlow = new AccountFlow();
+		accountFlow.setAccountId(account.getId());
+		accountFlow.setFlowType(AccountFlowflowType.充值);
+		accountFlow.setFlowCode(codeGeneratorService.getFlowCode());
+		accountFlow.setTradeDirection(AccountFlowTradeDirection.收入);
+		accountFlow.setTradeAmount(amount);
+		accountFlow.setTotalAmount(account.getTotalAmount()+amount);
+		accountFlow.setAvailableAmount(account.getAvailableAmount()+amount);
+		accountFlow.setFreezeAmount(account.getFreezeAmount());
+		accountFlow.setTargetCustomerId(null);
+		accountFlow.setOldFlowCode(null);
+		accountFlow.setMemo(memo);
+		accountFlowService.save(accountFlow);
+		return save(account);
+	}
+
+	/**
+	 * 提现审核
+	 * @param withdrawId
+	 * @param memo
+	 * @param auditStatus
+	 */
+	@Transactional()
+	public ResponseVo withdrawAudit(String withdrawId, String memo,WithdrawStatus auditStatus) {
+		ResponseVo responseVo = ResponseVo.success();
+		Withdraw withdraw = withdrawService.findOne(withdrawId);
+		if(null == withdraw){
+			throw new SLException("110007");
+		}
+		if(WithdrawStatus.待处理 != withdraw.getStatus()){
+			throw new SLException("110008");
+		}
+		Customer customer = customerService.findById(withdraw.getCustomerId());
+		AccountService self = SpringUtils.getBean(AccountService.class);
+		
+		//防止脏数据，
+		if(null == customer){
+			withdraw.setStatus(WithdrawStatus.提现失败);
+			withdrawService.save(withdraw);
+			return ResponseVo.fail("111111", "该笔提现申请对应的客户不存在");
+		}
+		Account account = repository.findByCustomerId(customer.getId());
+		if(null == account){
+			withdraw.setStatus(WithdrawStatus.提现失败);
+			withdrawService.save(withdraw);
+			return ResponseVo.fail("111111", "账户信息不存在，审核失败");
+		}
+		AccountFlow oldFlow = accountFlowService.findOne(withdrawId);
+		if(null == oldFlow){
+			withdraw.setStatus(WithdrawStatus.提现失败);
+			withdrawService.save(withdraw);
+			return ResponseVo.fail("111111", "原冻结流水信息不存在，审核失败");
+		}
+		//判断用户状态
+		if(customer.getStatus() != CustomerStatus.正常){
+			self.doWithdrawAudit(false, withdraw, account,oldFlow,"客户状态异常");
+			throw new SLException("110009");
+		}
+		if(auditStatus == WithdrawStatus.提现成功){
+			self.doWithdrawAudit(true, withdraw, account,oldFlow,memo);
+		}else{
+			self.doWithdrawAudit(false, withdraw, account,oldFlow,memo);
+		}
+		return responseVo;
+	}
+	
+	/**
+	 * 处理审核结果
+	 * @param isSuccess
+	 * @param withdraw
+	 */
+	@Transactional(propagation=Propagation.REQUIRES_NEW)
+	public boolean doWithdrawAudit(boolean isSuccess,Withdraw withdraw,Account account,AccountFlow oldFlow,String memo){
+		AccountFlow accountFlow = new AccountFlow();
+		if(isSuccess){
+			withdraw.setStatus(WithdrawStatus.提现成功);
+			account.setFreezeAmount(account.getFreezeAmount()-withdraw.getAmount());
+			
+			accountFlow.setTradeAmount(withdraw.getAmount());
+			accountFlow.setTotalAmount(account.getTotalAmount());
+			accountFlow.setAvailableAmount(account.getAvailableAmount());
+			accountFlow.setFreezeAmount(account.getFreezeAmount()-withdraw.getAmount());
+			accountFlow.setTradeDirection(AccountFlowTradeDirection.支出);
+		}else{
+			//提现失败，解冻提现金额，并记录流水
+			withdraw.setStatus(WithdrawStatus.提现失败);
+			account.setFreezeAmount(account.getFreezeAmount()-withdraw.getAmount());
+			account.setTotalAmount(account.getTotalAmount()+withdraw.getAmount());
+			account.setAvailableAmount(account.getAvailableAmount()+withdraw.getAmount());
+			
+			accountFlow.setTradeAmount(withdraw.getAmount());
+			accountFlow.setTotalAmount(account.getTotalAmount()+withdraw.getAmount());
+			accountFlow.setAvailableAmount(account.getAvailableAmount()+withdraw.getAmount());
+			accountFlow.setFreezeAmount(account.getFreezeAmount()-withdraw.getAmount());
+			accountFlow.setTradeDirection(AccountFlowTradeDirection.收入);
+		}
+		accountFlow.setAccountId(account.getId());
+		accountFlow.setFlowType(AccountFlowflowType.提现解冻);
+		accountFlow.setFlowCode(codeGeneratorService.getFlowCode());
+		accountFlow.setTargetCustomerId(account.getCustomerId());
+		accountFlow.setOldFlowCode(oldFlow.getFlowCode());
+		accountFlow.setMemo(memo);
+		accountFlowService.save(accountFlow);
+		withdrawService.save(withdraw);
+		save(account);
+		return true;
+	}
+	
+	public PageResponse<Map<String, Object>> withdrawList(PageRequestVo pageRequest) {
+		return repository.withdrawList(pageRequest);
+	}
+
+	public PageResponse<Map<String, Object>> flowList(PageRequestVo pageRequest) {
+		if(pageRequest.getParam("userType")==null || StringUtils.isBlank((String)pageRequest.getParam("userType"))){
+			throw new SLException("110010");
+		}
+		return repository.flowList(pageRequest);
+	}
+
+	public List<Map<String, Object>> flowExport(AccountFlowExportVo accountFlowExportVo, int monthsBetween) {
+		String endDate = accountFlowExportVo.getEndDate();
+		String startDate = accountFlowExportVo.getStartDate();
+		Date endDateD = null;
+		Date startDateD = null;
+		// 1、判断并设置开始和结束时间
+		if (StringUtils.isBlank(endDate) && StringUtils.isBlank(startDate)) {
+			endDateD = DateUtil.getToday();
+			startDateD = DateUtil.addMonths(endDateD, -monthsBetween);
+		} else if ((!StringUtils.isBlank(endDate)) && StringUtils.isBlank(startDate)) {
+			endDateD = DateUtil.parseToDate(endDate, "yyyy-MM-dd");
+			startDateD = DateUtil.addMonths(endDateD, -monthsBetween);
+		} else if ((!StringUtils.isBlank(startDate)) && StringUtils.isBlank(endDate)) {
+			startDateD = DateUtil.parseToDate(startDate, "yyyy-MM-dd");
+			endDateD = DateUtil.addMonths(startDateD, monthsBetween);
+		} else {
+			endDateD = DateUtil.parseToDate(endDate, "yyyy-MM-dd");
+			startDateD = DateUtil.parseToDate(startDate, "yyyy-MM-dd");
+		}
+		// 2、判断时间跨度是否大于3个月
+		if (DateUtil.addMonths(startDateD, monthsBetween).compareTo(endDateD) < 0) {
+			throw new SLException("600008");
+		}
+		accountFlowExportVo.setEndDate(new SimpleDateFormat("yyyy-MM-dd").format(endDateD));
+		accountFlowExportVo.setStartDate(new SimpleDateFormat("yyyy-MM-dd").format(startDateD));
+		return repository.flowExport(accountFlowExportVo);
+	}
+
+}

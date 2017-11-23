@@ -1,0 +1,124 @@
+/** 
+ * @(#)AdvertisementRepository.java 1.0.0 2016年7月25日 下午3:02:48  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.repositories;
+
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.slfinance.redpack.core.constants.enums.AdvertisementType;
+import com.slfinance.redpack.core.constants.enums.AdvertisementStatus;
+import com.slfinance.redpack.core.entities.Advertisement;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.extend.jpa.page.QueryExtend;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 下午3:02:48 $
+ */
+public interface AdvertisementRepository extends BaseRepository<Advertisement> {
+
+	
+	/**
+	 * 根据广告编码和状态查询广告
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月24日 上午9:00:24
+	 * @param advertisementCode
+	 * @param status
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value="select t.id,t.advertiser_name,t.logo,t.content,t.hyperlink,t.correct_answer from rp_t_advertisement t where ?(t.advertisement_code = :advertisementCode)? and ?(t.type in( :types ))? and ?(t.status in( :status ))? ")
+	public Map<String, Object> findByAdvertisementCodeAndStatusAndTypes(@Param("advertisementCode") String advertisementCode, @Param("status")List<String> status, @Param("types") List<String> types);
+
+	/**
+	 * 广告列表查询
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午2:02:43
+	 * @param pageRequest
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select * from rp_t_advertisement t where ?(t.status = :status)? and ?(t.type = :type)? and ?(trunc(t.start_date)) >= to_date( :beginStartDate , 'yyyy-mm-dd')? and ?(trunc(t.start_date)) <= to_date( :stopStartDate , 'yyyy-mm-dd')? and ?(trunc(t.end_date)) >= to_date( :beginEndDate , 'yyyy-mm-dd')? and ?(trunc(t.end_date)) <= to_date( :stopEndDate , 'yyyy-mm-dd')? order by t.created_date desc")
+	public PageResponse<Advertisement> findAllPage(PageRequestVo pageRequest);
+
+	/**
+	 * 单个广告详情查询
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午2:03:20
+	 * @param id
+	 * @return
+	 */
+	@QueryExtend()
+	@Query(nativeQuery = true, value = "select a.id,a.advertisement_code,a.type,a.advertiser_name,a.logo,a.status,a.title,a.content,to_char(a.start_date, 'yyyy-mm-dd') start_date,to_char(a.end_date, 'yyyy-mm-dd') end_date,a.hyperlink,a.hits_count,a.correct_answer,a.created_date from rp_t_advertisement a where a.id = :id ")
+	public Map<String, Object> findOneDetail(@Param("id") String id);
+
+	/**
+	 * 后台登录首页统计信息
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午2:05:42
+	 * @param redpackStatus
+	 * @return
+	 */
+	@QueryExtend
+	@Query(nativeQuery = true, value = "select a.counts total_customer_count, b.counts total_sent_redpack_count, b.amounts total_sent_redpack_amount, c.counts \"todayIncreaseCustomerCount\", d.counts \"todayTotalSentRedpackCount\", d.amounts \"todayTotalSentRedpackAmount\" from (select count(1) counts from rp_t_customer) a, (select nvl(sum(t.amount),0) amounts, nvl(sum(t.total_person_time),0) counts from rp_t_redpack t where t.status in(:redpackStatus)) b, (select count(1) counts from rp_t_customer t where trunc(t.created_date) = trunc(sysdate)) c, (select nvl(sum(t.amount),0) amounts, nvl(sum(t.total_person_time),0) counts from rp_t_redpack t where trunc(t.time_point) = trunc(sysdate) and t.status in(:redpackStatus)) d")
+	public Map<String, Object> indexPageSummary(@Param("redpackStatus") List<String> redpackStatus);
+
+	/**
+	 * 根据广告类型、状态、使用时间范围、并且按照启用时间倒排查询出一条广告 
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月17日 下午1:16:42
+	 * @param type
+	 *            红包广告, 首页广告, 任务广告
+	 * @param startDate
+	 *            这里传入的时间，广告启用时间小于传入时间 。--其中这里的startDate和endDate值是同一个时间值，并且，是剔除时分秒的时间。例如：2016-8-31 00:00:00
+	 * @param endDate
+	 *            这里传入的时间，广告结束时间大于传入时间
+	 * @param status
+	 *            未下架, 已下架
+	 * @return
+	 */
+	Advertisement findFirstByTypeAndStartDateLessThanEqualAndEndDateGreaterThanEqualAndStatusOrderByStartDateDesc(AdvertisementType type, Date startDate, Date endDate, AdvertisementStatus status);
+
+	public Advertisement findByAdvertisementCode(String advertisementCode);
+
+	/**
+	 * 根据广告主主键和广告状态查询广告
+	 * @author taoxm
+	 * @createTime 2016年8月29日 下午3:22:18
+	 * @param advertiserId
+	 * @param status
+	 * @return
+	 */
+	//public List<Advertisement> findByAdvertiserIdAndStatus(@Param("advertiserId")String advertiserId, @Param("status")AdvertisementStatus status);
+	
+	/**
+	 * app-获取广告列表
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月3日 上午11:32:40
+	 * @param pageRequest
+	 * @return
+	 * @throws SLException
+	 */
+	@QueryExtend
+	@Query(nativeQuery=true , value="select id,title,logo from rp_t_advertisement where created_user = :customerId order by created_date desc ")
+	PageResponse<Advertisement> advertisementList(PageRequestVo pageRequest);
+}

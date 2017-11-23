@@ -1,0 +1,74 @@
+/**
+ * @(#)CreditConstant.java 1.0.0 2016年3月29日 上午11:54:37
+ * <p>
+ * Copyright © 2016 善林金融.  All rights reserved.
+ */
+
+package com.slfinance.redpack.core.constants;
+
+import java.util.regex.Pattern;
+
+/**
+ * 系统常量类
+ * 
+ * @author kongx
+ * @version $Revision:1.0.0, $Date: 2016年3月29日 上午11:54:37 $
+ */
+public class RedPackConstant {
+	// 密码规则：6-12为数字和字母组合，不能是纯数字或纯字母，也不能包含特殊字符
+	public static final Pattern PASSWORD_REGEX = Pattern.compile("^(?![0-9]+$)(?![a-zA-Z]+$)[0-9A-Za-z]{6,12}$");
+	//交易密码规则：6位数字
+	public static final Pattern TRANSACTION_PASSWORD_REGEX = Pattern.compile("\\d{6}");
+	public static final String NICK_NAME_REGEX = "^[0-9a-zA-Z_.@]{1,20}$";
+	public static final String NAME_REGEX = "[\u4e00-\u9fa5]{2,}";
+	public static final String AGE_REGEX = "(1[89]|[2-5][0-9]|60)";
+	
+	//开红包时间，目前设置5分钟
+	public static final Long START_REDPACK_TIME_MINITS = 5L;
+	
+	/*
+	 * 红包开启前多少分钟无法订阅，目前设置1分钟
+	 * 
+	 */
+	public static final Long BEFORE_START_REDPACK_TIME_MINITS_NOT_DINGYUE = 3L;
+
+	/**
+	 * 红包参与人次
+	 */
+	public static final Integer TOTAL_PERSON_TIME = 200;
+	
+	/**
+	 * 修改红包时，红包开启时间必须比当前时间大于5分钟
+	 */
+	public static final Integer REDPACK_MODIFY_BEFORE_NOW_MINS = 5;
+	
+	/**
+	 * 红包预约提醒推送提前3分钟
+	 */
+	public static final Integer REDPACK_APPOINTMENT_PUSH_AHEAD_MINS = 3;
+	
+	/**
+	 * 新增红包时，红包开启时间必须比当前时间大于30分钟
+	 */
+	public static final Integer REDPACK_SAVE_BEFORE_NOW_MINS = 30;
+	/**
+	 * 定时任务，红包状态为未开启，修改成正开启的时候，提前执行时间，单位：秒
+	 */
+	public static final Long REDPACK_OPENPOINT_BEFORE_NOW_SEC = 2L;
+	
+	/**
+	 * 定时任务，红包状态为未开启，修改成正开启的时候，或者红包状态为正开启，修改为已开启，如果还未执行时间较长，则刷新频率为4分钟，单位：分钟
+	 */
+	public static final Long REDPACK_OPENPOINT_BEFORE_NOW_FRESH = 4L;
+	
+	/**
+	 * 发红包费率
+	 */
+	public static final Double REDPACK_PAY_RATE = 0.2;
+	
+	/**
+	 * 抢红包固定时间点,注意顺序一定是从小到大排序
+	 */
+	public static String[] REDPACK_TIME_POINT = {" 09:00:00"," 10:00:00"," 11:00:00"," 14:00:00"," 15:00:00"," 16:00:00"," 20:00:00"," 21:00:00"};
+	
+}

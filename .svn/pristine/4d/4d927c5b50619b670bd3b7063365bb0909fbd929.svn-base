@@ -1,0 +1,19 @@
+package com.slfinance.redpack.core.services;
+
+import org.springframework.stereotype.Service;
+
+import com.slfinance.redpack.core.constants.enums.AccountFlowTradeDirection;
+import com.slfinance.redpack.core.constants.enums.AccountFlowflowType;
+import com.slfinance.redpack.core.entities.Account;
+import com.slfinance.redpack.core.entities.AccountFlow;
+import com.slfinance.redpack.core.repositories.AccountFlowRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+@Service
+public class AccountFlowService extends BaseService<AccountFlow, AccountFlowRepository>{
+
+	
+	public AccountFlow addFlow(Account account,AccountFlowflowType flowType,AccountFlowTradeDirection tradeDirection,String targetCustomerId,String oldFlowCode){
+		return null;
+	}
+}

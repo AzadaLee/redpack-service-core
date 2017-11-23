@@ -1,0 +1,121 @@
+/** 
+ * @(#)RedPackController.java 1.0.0 2016年8月16日 下午3:24:24  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+package com.slfinance.redpack.core.controller.crm;
+
+import java.text.ParseException;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.slfinance.redpack.common.utils.MapUtil;
+import com.slfinance.redpack.core.constants.enums.AdvertisementUserType;
+import com.slfinance.redpack.core.controller.base.BaseController;
+import com.slfinance.redpack.core.entities.Advertisement;
+import com.slfinance.redpack.core.extend.fastjson.Serialize;
+import com.slfinance.redpack.core.extend.fastjson.SerializeRule;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.validate.annotations.Rule;
+import com.slfinance.redpack.core.extend.validate.annotations.Rules;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.AdvertisementService;
+import com.slfinance.redpack.core.services.FileService;
+import com.slfinance.redpack.core.vo.AdvertisementVo;
+
+@RestController("crmAdvertisementController")
+@RequestMapping(value = "/crm/advertisement", method = RequestMethod.POST)
+public class AdvertisementController extends BaseController {
+
+	@Autowired
+	private AdvertisementService advertisementService;
+	
+	@Autowired
+	private FileService fileService;
+
+	/**
+	 * 广告列表
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午1:56:24
+	 * @param pageRequest
+	 * @return
+	 */
+	@RequestMapping("/findAllPage")
+	@Serialize({ @SerializeRule(clazz = Advertisement.class, include = { "id", "advertisementCode", "type", "status", "hitsCount", "sharedCount", "startDate", "endDate","advertiserName","createdDate" }) })
+	public ResponseVo findAllPage(PageRequestVo pageRequest) {
+		return ResponseVo.success(advertisementService.findAllPage(pageRequest));
+	}
+
+	/**
+	 * 根据广告编号获取红包广告
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午3:15:16
+	 * @param params
+	 * @return
+	 */
+	@Rules({ @Rule(name = "advertisementCode", required = true, requiredMessage = "500007") })
+	@RequestMapping("/findAdvertisementByCode")
+	public ResponseVo findAdvertisementByCode(@RequestBody Map<String, Object> params) {
+		String advertisementCode = MapUtil.getStringTrim(params, "advertisementCode");
+		Map<String, Object> result = advertisementService.findByAdvertisementCode(advertisementCode);
+		return ResponseVo.success(fileService.doPathAndLogo(staticResourceProxyURI, result, null));
+	}
+
+	/**
+	 * 新增|修改
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午3:14:56
+	 * @param advertisementVo
+	 * @return
+	 */
+	@RequestMapping("/save")
+	public ResponseVo save(@RequestBody @Validated AdvertisementVo advertisementVo) {
+		try {
+			advertisementService.saveAdvertisement(advertisementVo,AdvertisementUserType.后台);
+		} catch (ParseException e) {
+			return new ResponseVo("999999", "时间格式不正确", null);
+		}
+		return ResponseVo.success();
+	}
+
+	/**
+	 * 查找单个广告详情
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午2:07:42
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("/findOneDetail")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "500008") })
+	public ResponseVo findOneDetail(@RequestBody Map<String, Object> params) {
+		String id = MapUtil.getStringTrim(params, "id");
+		Map<String, Object> result = advertisementService.findOneDetail(id);
+		return ResponseVo.success(fileService.doPathAndLogo(staticResourceProxyURI, result, null));
+	}
+
+	/**
+	 * 下架
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午3:08:45
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("/soldOut")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "500008") })
+	public ResponseVo soldOut(@RequestBody Map<String, Object> params) {
+		String id = MapUtil.getStringTrim(params, "id");
+		advertisementService.soldOut(id);
+		return ResponseVo.success();
+	}
+}

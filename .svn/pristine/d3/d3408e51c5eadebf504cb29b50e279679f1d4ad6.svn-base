@@ -1,0 +1,74 @@
+package com.slfinance.redpack.core.services;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.Assert;
+import org.junit.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.slfinance.redpack.core.ServiceCoreApplicationTests;
+import com.slfinance.redpack.core.constants.enums.AdvertiserStatus;
+import com.slfinance.redpack.core.entities.Advertiser;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+
+public class AdvertiserServiceTest extends ServiceCoreApplicationTests{
+	
+	@Autowired
+	private AdvertiserService advertiserService;
+	
+	@Autowired
+	private CodeGeneratorService codeGeneratorService;
+	/**
+	 * 测试广告主列表查询
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:45:27
+	 */
+	@Test
+	public void testFindAllPage(){
+		PageRequestVo pageRequestVo = new PageRequestVo();
+		pageRequestVo.addParam("start", 0);
+		pageRequestVo.addParam("length", 10);
+		Assert.assertTrue(advertiserService.findAllPage(pageRequestVo) != null);
+	}
+	
+	/**
+	 * 测试保存广告主
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:46:04
+	 */
+	@Test
+	public void testSaveAdvertiser(){
+		Advertiser advertiser = new Advertiser();
+		String advertiserCode = codeGeneratorService.getAdvertiserCode();
+		advertiser.setAdvertiserCode(advertiserCode);
+		advertiser.setName("善林金融");
+		advertiser.setLogo("/veeef.jpg");
+		advertiser.setMobile("13999994444");
+		advertiser.setAddress("上海浦东");
+		Assert.assertTrue(advertiserService.saveAdvertiser(advertiser,true) != null);
+	}
+	
+	/**
+	 * 测试修改广告主
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:46:38
+	 */
+	@Test
+	public void testModifyAdvertiser(){
+		String id = "a5b60171-cd55-47c0-9eeb-fec7498e6b6d";
+		Assert.assertTrue(advertiserService.del(id) != null);
+	}
+	
+	/**
+	 * 测试查询所有广告主（作为下拉框）
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:46:57
+	 */
+	@Test
+	public void testFindAll2Select(){
+		List<String> status = new ArrayList<String>();
+		status.add(AdvertiserStatus.新建.name());
+		Assert.assertTrue(advertiserService.findAll2Select(status) != null);
+	}
+}

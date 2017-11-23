@@ -1,0 +1,40 @@
+/** 
+ * @(#)RedPackUtils.java 1.0.0 2016年8月26日 上午9:09:05  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.utils;
+
+import com.slfinance.redpack.common.utils.DigestUtil;
+import com.slfinance.redpack.core.constants.enums.BusinessType;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.validate.RuleUtils;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年8月26日 上午9:09:05 $
+ */
+public class RedPackUtils {
+
+	/**
+	 * 项目密码加密
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月26日 上午9:15:17
+	 * @param password
+	 * @return
+	 * @throws SLException
+	 */
+	public static String encryptionPassword(String password,BusinessType businessType) throws SLException {
+		String decodePassword = DigestUtil.aesDecode(password); // 先解码
+		//校验密码规则
+		if (RuleUtils.isPassword(decodePassword, businessType)) {
+			return DigestUtil.encryptPassword(decodePassword); // 在加密
+		} else {
+			throw new SLException("400008", "password wrong");
+		}
+	}
+}

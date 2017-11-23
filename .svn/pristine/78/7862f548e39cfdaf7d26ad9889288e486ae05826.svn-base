@@ -1,0 +1,10 @@
+package com.slfinance.redpack.core.constants;
+
+public class CommonConstant {
+
+	
+	/**
+	 * 系统账户ID
+	 */
+	public static final String SYSTEM_ACCOUNT_ID = "1";
+}

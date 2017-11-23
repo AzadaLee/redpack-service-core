@@ -1,0 +1,59 @@
+package com.slfinance.redpack.core.entities.base;
+
+import java.util.Date;
+
+import javax.persistence.EntityListeners;
+import javax.persistence.MappedSuperclass;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+/**
+ * @author samson
+ * @date 2016/3/23 13:56
+ */
+@MappedSuperclass
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
+public class BaseEntity extends Entity {
+
+	/**
+	 *
+	 */
+	private static final long serialVersionUID = -1593605261420209808L;
+	/**
+	 * 创建人
+	 */
+	@CreatedBy
+	private String createdUser;
+	/**
+	 * 创建时间
+	 */
+	@CreatedDate
+	private Date createdDate;
+	/**
+	 * 最后修改人
+	 */
+	@LastModifiedBy
+	private String lastModifiedUser;
+	/**
+	 * 最后修改时间
+	 */
+	@LastModifiedDate
+	private Date lastModifiedDate;
+
+	/**
+	 * 备注
+	 */
+	private String memo;
+
+}

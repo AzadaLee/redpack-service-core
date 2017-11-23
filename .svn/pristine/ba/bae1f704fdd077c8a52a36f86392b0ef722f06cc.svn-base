@@ -1,0 +1,17 @@
+package com.slfinance.redpack.core.services;
+
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+import com.slfinance.redpack.core.entities.FileRelation;
+import com.slfinance.redpack.core.repositories.FileRelationRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+@Service
+public class FileRelationService extends BaseService<FileRelation, FileRelationRepository>{
+	
+	public List<FileRelation> findByFileId(String fileId){
+		return repository.findByFileId(fileId);
+	}
+}

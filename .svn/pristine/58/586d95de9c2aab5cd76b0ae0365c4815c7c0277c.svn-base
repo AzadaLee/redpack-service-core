@@ -1,0 +1,85 @@
+/**
+ * @(#)Advertisement.java 1.0.0 2016年7月25日 上午9:57:10
+ * <p/>
+ * Copyright © 2016 善林金融.  All rights reserved.
+ */
+
+package com.slfinance.redpack.core.entities;
+
+import java.util.Date;
+
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.Table;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import com.slfinance.redpack.core.constants.enums.RecordType;
+import com.slfinance.redpack.core.constants.enums.AdvertisementStatus;
+import com.slfinance.redpack.core.constants.enums.AdvertisementType;
+import com.slfinance.redpack.core.constants.enums.UserType;
+import com.slfinance.redpack.core.entities.base.BaseEntity;
+
+/**
+ * 广告表
+ *
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 上午9:57:10 $
+ */
+@Entity
+@Table(name = "RP_T_ADVERTISEMENT")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+public class Advertisement extends BaseEntity {
+
+	private static final long serialVersionUID = -5000000000000000001L;
+
+	private String advertiserCode;
+	private String advertiserName;
+	private String logo;
+	private String advertisementCode;
+	/**
+	 * 广告类型
+	 */
+	@Enumerated(EnumType.STRING)
+	private AdvertisementType type;
+	
+	private String title;
+	private String content;
+	private Date startDate;
+	private Date endDate;
+	private String correctAnswer;
+	/**
+	 * 分享数
+	 */
+	private Integer sharedCount = 0;
+	
+	/**
+	 * 点击数
+	 */
+	private Integer hitsCount = 0;
+	private String hyperlink;
+	
+	/**
+	 * 记录类型
+	 */
+	@Enumerated(EnumType.STRING)
+	private RecordType recordType = RecordType.正本;
+	
+	/**
+	 * 状态
+	 */
+	@Enumerated(EnumType.STRING)
+	private AdvertisementStatus status = AdvertisementStatus.未下架;
+	
+	/**
+	 * 用户类型
+	 */
+	@Enumerated(EnumType.STRING)
+	private UserType userType;
+
+}

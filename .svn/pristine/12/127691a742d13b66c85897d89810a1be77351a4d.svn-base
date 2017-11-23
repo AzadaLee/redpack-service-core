@@ -1,0 +1,24 @@
+package com.slfinance.redpack.core.services;
+
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+
+import com.slfinance.redpack.core.entities.AdvertisementAnswer;
+import com.slfinance.redpack.core.repositories.AdvertisementAnswerRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+@Service
+public class AdvertisementAnswerService extends BaseService<AdvertisementAnswer, AdvertisementAnswerRepository> {
+
+	/**
+	 * 根据广告编号获取问题
+	 * @param advertisementId
+	 * @return
+	 */
+	public List<Map<String, Object>> findByAdvertisementId(String advertisementId){
+		List<Map<String, Object>> result = repository.findByAdvertisementIdForMap(advertisementId);
+		return result;
+	}
+}

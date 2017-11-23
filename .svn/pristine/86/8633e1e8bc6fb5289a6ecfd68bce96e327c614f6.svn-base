@@ -1,0 +1,265 @@
+/** 
+ * @(#)CustomerController.java 1.0.0 2016年8月15日 下午1:51:19  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.controller;
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.commons.collections.MapUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.common.utils.FormatUtils;
+import com.slfinance.redpack.core.constants.RedPackConstant;
+import com.slfinance.redpack.core.constants.TableConstant;
+import com.slfinance.redpack.core.constants.enums.BusinessType;
+import com.slfinance.redpack.core.constants.enums.CustomerRelationType;
+import com.slfinance.redpack.core.constants.enums.SMSContentTemplate;
+import com.slfinance.redpack.core.controller.base.BaseController;
+import com.slfinance.redpack.core.entities.Customer;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.validate.annotations.Rule;
+import com.slfinance.redpack.core.extend.validate.annotations.Rules;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.CustomerService;
+import com.slfinance.redpack.core.services.MessageService;
+import com.slfinance.redpack.core.services.RedPackService;
+import com.slfinance.redpack.core.services.SMSMessageService;
+import com.slfinance.redpack.core.utils.FormatPrefixUrl;
+import com.slfinance.redpack.core.utils.RedPackUtils;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年8月15日 下午1:51:19 $
+ */
+@RestController
+@RequestMapping(value = "customer", method = RequestMethod.POST)
+public class CustomerController extends BaseController {
+
+	@Autowired
+	private CustomerService customerService;
+
+	@Autowired
+	private RedPackService redpackService;
+
+	@Autowired
+	private SMSMessageService sMSMessageService;
+	
+	@Autowired
+	private MessageService messageService;
+
+	/**
+	 * app-客户注册
+	 * 
+	 * { "invitationCode":"YAOQINGMA",
+	 * "mobile":"18616258750","verificationCode":"929094", "password":"222222" }
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月15日 下午2:28:56
+	 * @param invitationCode
+	 *            邀请码
+	 * @param mobile
+	 *            手机号
+	 * @param verificationCode
+	 *            验证码
+	 * @param password
+	 *            密码
+	 * @throws SLException
+	 */
+	@RequestMapping("register")
+	@Rules({ @Rule(name = "mobile", required = true, requiredMessage = "120017", mobile = true, mobileMessage = "100014"), @Rule(name = "verificationCode", required = true, requiredMessage = "100011"), @Rule(name = "password", required = true, requiredMessage = "120016") })
+	public ResponseVo appRegister(@RequestBody Map<String, Object> params) throws SLException {
+		customerService.register(getRegisterCustomer(params), MapUtils.getString(params, "verificationCode"), MapUtils.getString(params, "invitationCode"));
+		return ResponseVo.success();
+	}
+
+	private Customer getRegisterCustomer(Map<String, Object> params) {
+		Customer customer = new Customer();
+		customer.setMobile(MapUtils.getString(params, "mobile"));
+		customer.setPassword(RedPackUtils.encryptionPassword(MapUtils.getString(params, "password")));
+		return customer;
+	}
+
+	/**
+	 * app-忘记密码(根据验证码重置密码)
+	 * 
+	 * {"mobile":"15716382738","verificationCode":"720549", "password":"111111"}
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月15日 下午6:40:35
+	 * @param mobile
+	 *            手机号
+	 * @param verificationCode
+	 *            验证码
+	 * @param password
+	 *            新密码
+	 * @return
+	 * @throws SLException
+	 */
+	@RequestMapping("forgetPassword")
+	@Rules({ @Rule(name = "mobile", required = true, requiredMessage = "120017", mobile = true, mobileMessage = "100014"), @Rule(name = "verificationCode", required = true, requiredMessage = "100011"), @Rule(name = "password", required = true, requiredMessage = "120016") })
+	public ResponseVo appForgetPassword(@RequestBody Map<String, Object> params) throws SLException {
+		customerService.appResetPassword(MapUtils.getString(params, "mobile"), MapUtils.getString(params, "verificationCode"), RedPackUtils.encryptionPassword(MapUtils.getString(params, "password")));
+		return ResponseVo.success();
+	}
+
+	/**
+	 * app-修改密码(根据旧密码更新密码)
+	 * 
+	 * { "oldPassword":"111111", "password":"222222" }
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月15日 下午6:49:48
+	 * @param oldPassword
+	 *            旧密码
+	 * @param password
+	 *            新密码
+	 * @return
+	 * @throws SLException
+	 */
+	@RequestMapping("resetPassword")
+	@Rules({ @Rule(name = "oldPassword", required = true, requiredMessage = "120032"), @Rule(name = "password", required = true, requiredMessage = "120034") })
+	public ResponseVo appUpdateLoginPassword(@RequestBody Map<String, Object> params) throws SLException {
+		customerService.appUpdatePassword(RedPackUtils.encryptionPassword(MapUtils.getString(params, "oldPassword")),RedPackUtils.encryptionPassword(MapUtils.getString(params, "password")), getLoginUser());
+		return ResponseVo.success();
+	}
+
+	/**
+	 * app-首页数据获取
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月2日10:18:47
+	 * @return
+	 */
+	@RequestMapping("homePage")
+	public ResponseVo appHomePage() {
+		// 根据系统时间查询距离系统时间查询是否有开启的红包
+		Map<String, Object> result = new HashMap<String, Object>();
+		Date systemTime = new Date();
+		result.put("todayTotalCount", redpackService.todayTotalCount(systemTime));
+		result.put("todaySentCount", redpackService.todaySentCount(systemTime));
+		result.put("messageCount", messageService.messageNoReadCount(getLoginUserId()));
+		return ResponseVo.success(result);
+	}
+
+	/**
+	 * 封装结果
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午7:44:45
+	 */
+	private void nextRedPackResult(RedPack closelyHaveNotOnRedpack, Map<String, Object> result) {
+		if (closelyHaveNotOnRedpack != null) {
+			result.put("nextRedPackId", closelyHaveNotOnRedpack.getId());
+			result.put("nextRedPackTime", closelyHaveNotOnRedpack.getTimePoint());
+			result.put("reloadTime", closelyHaveNotOnRedpack.getTimePoint());
+		} else {
+			result.put("nextRedPackId", "");
+			result.put("nextRedPackTime", "0");
+			result.put("reloadTime", "0");
+		}
+	}
+
+	/**
+	 * app-查找我的邀请记录
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月19日 下午3:27:19
+	 * @param pageRequest
+	 * @return
+	 */
+	@RequestMapping("findMyInvited")
+	public ResponseVo appFindMyInvited(PageRequestVo pageRequest) {
+		pageRequest.addParam("customerId", getLoginUserId());
+		pageRequest.addParam("customerRelationType", CustomerRelationType.好友邀请.toString());
+		return ResponseVo.success(FormatPrefixUrl.markMobile(customerService.appFindMyInvited(pageRequest), new String[]{"mobile"}));
+	}
+
+	/**
+	 * app-发送短信验证码
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月19日 下午3:27:19
+	 * @return
+	 */
+	@RequestMapping("sendSMS")
+	@Rules({ @Rule(name = "mobile", required = true, requiredMessage = "120017", mobile = true, mobileMessage = "100014") })
+	public ResponseVo appSendSMS(@RequestBody Map<String, Object> params) throws SLException {
+		if (BusinessType.valueOf(MapUtils.getString(params, "type")) != BusinessType.注册 && BusinessType.valueOf(MapUtils.getString(params, "type")) != BusinessType.找回密码 && BusinessType.valueOf(MapUtils.getString(params, "type")) != BusinessType.交易密码找回) {
+			throw new SLException("100000", "param was wrong");
+		}
+		sMSMessageService.sendMobileVerificationCode(MapUtils.getString(params, "mobile"), BusinessType.valueOf(MapUtils.getString(params, "type")), SMSContentTemplate.验证, getLoginUserId());
+		return ResponseVo.success();
+	}
+	
+	/**
+	 * app-获取客户自己的个人信息
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月25日 下午8:06:15
+	 * @return
+	 */
+	@RequestMapping("myInfo")
+	public ResponseVo appMyInfo() throws SLException {
+		Map<String, Object> result = new HashMap<String, Object>();
+		Customer customer = customerService.findById(getLoginUserId());
+		if (customer != null) {
+			result.put("mobile", FormatUtils.markMobile(customer.getMobile()));
+			result.put("invitationCode", customer.getInvitationCode());
+			result.put("invitationShareURL", FormatPrefixUrl.addDomainNameAndFormatAppShareInviteUrl(domainName, customer.getId()));
+		} else {
+			throw new SLException("400003", "customer not found");
+		}
+		return ResponseVo.success(result);
+	}
+
+	/**
+	 * app-获取客户信息
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月25日 下午8:06:15
+	 * @return
+	 */
+	@RequestMapping("findInfoById")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "100016") })
+	public ResponseVo appFindInfoById(@RequestBody Map<String, Object> params) throws SLException {
+		Map<String, Object> result = new HashMap<String, Object>();
+		Customer customer = customerService.findById(MapUtils.getString(params, "id"));
+		if (customer != null) {
+			result.put("mobile", FormatUtils.markMobile(customer.getMobile()));
+			result.put("invitationCode", customer.getInvitationCode());
+			result.put("invitationShareURL", FormatPrefixUrl.addDomainNameAndFormatAppShareInviteUrl(domainName, customer.getId()));
+		} else {
+			throw new SLException("400003", "customer not found");
+		}
+		return ResponseVo.success(result);
+	}
+	
+	/**
+	 * app-站内信列表
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月2日18:39:31
+	 * @param pageRequest
+	 * @return
+	 */
+	@RequestMapping("messages")
+	public ResponseVo appFindMessagesListByUserId(PageRequestVo pageRequest) {
+		pageRequest.addParam("customerId", getLoginUserId());
+		return ResponseVo.success(messageService.findMessagesListByUserId(pageRequest));
+	}
+	
+}

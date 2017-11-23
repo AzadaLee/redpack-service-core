@@ -1,0 +1,77 @@
+/**
+ * @(#)Redpack.java 1.0.0 2016年7月25日 上午11:34:31
+ * <p/>
+ * Copyright © 2016 善林金融.  All rights reserved.
+ */
+
+package com.slfinance.redpack.core.entities;
+
+import java.util.Date;
+
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.Table;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import com.slfinance.redpack.core.constants.enums.RedpackStatus;
+import com.slfinance.redpack.core.entities.base.BaseEntity;
+
+/**
+ * 红包表
+ *
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 上午11:34:31 $
+ */
+@Entity
+@Table(name = "RP_T_REDPACK")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+public class RedPack extends BaseEntity {
+
+	private static final long serialVersionUID = -5000000000000000006L;
+
+	/**
+	 * 广告ID
+	 */
+	private String advertisementId;
+
+	/**
+	 * 红包编码
+	 */
+	private String redpackCode;
+
+	/**
+	 * 时间点
+	 */
+	private Date timePoint;
+
+	/**
+	 * 金额
+	 */
+	private Double amount;
+
+	/**
+	 * 参与人次
+	 */
+	private Integer totalPersonTime;
+
+	/**
+	 * 口令
+	 */
+	private String shibboleth;
+
+	/**
+	 * 红包标题
+	 */
+	private String title;
+	/**
+	 * 红包状态(未开启|已开启)
+	 */
+	@Enumerated(EnumType.STRING)
+	private RedpackStatus status = RedpackStatus.未开启;
+}

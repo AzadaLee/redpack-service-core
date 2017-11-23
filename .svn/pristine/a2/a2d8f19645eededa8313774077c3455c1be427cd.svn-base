@@ -1,0 +1,37 @@
+/** 
+ * @(#)BusinessType.java 1.0.0 2016年7月25日 下午2:31:14  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.constants.enums;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 下午2:31:14 $
+ */
+public enum BusinessType {
+	注册("register"), 找回密码("resetPassword"),交易密码找回("transactionPassword");
+
+	private String code;
+
+	BusinessType(String code) {
+		this.code = code;
+	}
+
+	public String getCode() {
+		return code;
+	}
+
+	public static BusinessType get(String code) {
+		BusinessType[] values = BusinessType.values();
+		for (BusinessType value : values) {
+			if (code.equals(value.code)) {
+				return value;
+			}
+		}
+		return null;
+	}
+}

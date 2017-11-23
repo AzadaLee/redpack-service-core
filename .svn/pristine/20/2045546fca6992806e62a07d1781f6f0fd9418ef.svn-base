@@ -1,0 +1,70 @@
+/** 
+ * @(#)BankService.java 1.0.0 2016年11月4日 下午7:29:37  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.core.constants.enums.BankRecordType;
+import com.slfinance.redpack.core.entities.Bank;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.repositories.BankRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月4日 下午7:29:37 $
+ */
+@Service
+public class BankService extends BaseService<Bank, BankRepository> {
+
+	/**
+	 * app-银行卡新增|修改
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月7日 上午10:33:43
+	 * @param id
+	 * @param bank
+	 * @param province
+	 * @param city
+	 * @param bankName
+	 * @param bankCode
+	 * @param cardHolderName
+	 * @param customerId
+	 */
+	@Transactional(readOnly = false)
+	public void saveCustomerBank(String id, String bank, String province, String city, String bankName, String bankCode, String cardHolderName, String customerId) throws SLException{
+		if (StringUtils.isNotBlank(id)) {
+			Bank customerBank = repository.findOne(id);
+			if (customerBank == null) {
+				throw new SLException("220007", "bank not found");
+			}
+		}
+		Bank customerBank = new Bank();
+		customerBank.setCustomerId(customerId);
+		customerBank.setBank(bank);
+		customerBank.setProvince(province);
+		customerBank.setCity(city);
+		customerBank.setBankName(bankName);
+		customerBank.setCardHolderName(cardHolderName);
+		repository.save(customerBank);
+	}
+	
+	/**
+	 * 查询客户银行卡信息
+	 * @author SangLy
+	 * @createTime 2016年11月7日 上午11:42:04
+	 * @param customerId
+	 * @return
+	 */
+	public Bank findBycustomerId(String customerId){
+		return repository.findBycustomerIdAndRecordType(customerId,BankRecordType.正本);
+	}
+}

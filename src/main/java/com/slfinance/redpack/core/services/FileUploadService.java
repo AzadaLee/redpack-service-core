@@ -1,0 +1,40 @@
+package com.slfinance.redpack.core.services;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.util.FileCopyUtils;
+
+@Service
+public class FileUploadService {
+	/**
+	 * 上传文件
+	 * 
+	 * @param multipartFile
+	 * @return
+	 * @throws Exception 
+	 */
+	public String uploadFile(String extensionName, byte[] fileBytes) throws Exception {
+		String uploadRootPath = "/upload/redpack";
+		String basePath = "/" + new SimpleDateFormat("yyyy/MM/dd/HH/mm").format(new Date());
+		String uploadPath = uploadRootPath + basePath;
+		File path = new File(uploadPath);
+		if(!path.exists()){
+			path.mkdirs();
+		}
+		// 构建上传文件名
+		String uploadFileName = UUID.randomUUID() + "." + extensionName;
+		String fullFileName = uploadPath + "/" + uploadFileName;
+		basePath = basePath + "/" + uploadFileName;
+		try {
+			FileCopyUtils.copy(fileBytes, new FileOutputStream(fullFileName));
+		} catch (Exception e) {
+			throw new Exception("上传文件失败");
+		}
+		return basePath;
+	}
+}

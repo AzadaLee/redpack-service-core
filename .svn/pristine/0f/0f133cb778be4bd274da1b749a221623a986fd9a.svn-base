@@ -1,0 +1,50 @@
+/** 
+ * @(#)Account.java 1.0.0 2016年11月1日 下午1:11:05  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.entities;
+
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.Table;
+
+import com.slfinance.redpack.core.constants.enums.AccountType;
+import com.slfinance.redpack.core.entities.base.BaseEntity;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月1日 下午1:11:05 $
+ */
+@Entity
+@Table(name = "RP_T_ACCOUNT")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+public class Account extends BaseEntity {
+
+	private static final long serialVersionUID = -5200000000000000001L;
+
+	private String customerId;
+	private String accountCode;
+	private Double totalAmount;
+	private Double availableAmount;
+	private Double freezeAmount;
+
+	/**
+	 * 账户类型
+	 */
+	@Enumerated(EnumType.STRING)
+	private AccountType accountType;
+
+	private String accountPassword;
+
+}

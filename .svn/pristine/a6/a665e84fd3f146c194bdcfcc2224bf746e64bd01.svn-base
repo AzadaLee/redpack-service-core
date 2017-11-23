@@ -1,0 +1,282 @@
+/** 
+ * @(#)CustomerService.java 1.0.0 2016年7月26日 上午9:54:42  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import java.util.Map;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.core.constants.TableConstant;
+import com.slfinance.redpack.core.constants.enums.BusinessType;
+import com.slfinance.redpack.core.constants.enums.CustomerRelationType;
+import com.slfinance.redpack.core.constants.enums.CustomerStatus;
+import com.slfinance.redpack.core.constants.enums.MessageTemplateMessageType;
+import com.slfinance.redpack.core.entities.Customer;
+import com.slfinance.redpack.core.entities.CustomerRelation;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.repositories.CustomerRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+import com.slfinance.redpack.core.vo.LoginUser;
+
+/**
+ * 前端客户（手机注册的抢红包用户）
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月26日 上午9:54:42 $
+ */
+@Service
+public class CustomerService extends BaseService<Customer, CustomerRepository> {
+
+	@Autowired
+	private VerificationCodeService verificationCodeService;
+
+	@Autowired
+	private CustomerRelationService customerRelationServide;
+	
+	@Autowired
+	private CodeGeneratorService codeGeneratorService;
+	
+	@Autowired
+	private AccountService accountService;
+	
+	@Autowired
+	private MessageService messageService;
+
+	/**
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月15日 下午2:28:56
+	 * @param customer
+	 *            保存客户前的封装参数
+	 * @param verificationCode
+	 *            验证码
+	 * @param invitationCode
+	 *            邀请码
+	 * @throws SLException
+	 */
+	@Transactional
+	public void register(Customer customer, String verificationCode, String invitationCode) throws SLException {
+
+		if (StringUtils.isNotBlank((invitationCode))) {
+			// 找出邀请人
+			Customer invitationCustomer = repository.findFirstByInvitationCode(invitationCode);
+			if (invitationCustomer == null) {
+				throw new SLException("120054", "This invitation code is wrong!");
+			}
+			// 被邀请人注册
+			Customer freshCustomer = registerCustomer(customer, verificationCode);
+			if (freshCustomer != null) {
+				// 记录一条邀请人邀请成功注册的记录，插入到客户关联表中
+				CustomerRelation customerRelation = new CustomerRelation();
+				customerRelation.setCustomerId(invitationCustomer.getId());
+				customerRelation.setRelateTable(TableConstant.T_CUSTOMER);
+				customerRelation.setRelatePrimary(freshCustomer.getId());
+				customerRelation.setType(CustomerRelationType.好友邀请);
+				customerRelationServide.save(customerRelation);
+				//向邀请人发一封站内信
+				messageService.sendMessage(MessageTemplateMessageType.邀请好友成功, invitationCustomer.getId(),freshCustomer.getId() );
+			}
+			
+		} else {
+			// 被邀请人注册
+			registerCustomer(customer, verificationCode);
+		}
+
+	}
+
+	/**
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月15日 下午3:56:49
+	 * @param customer
+	 *            保存客户前的封装参数
+	 * @param verificationCode
+	 *            验证码
+	 * @return
+	 */
+	private Customer registerCustomer(Customer customer, String verificationCode) {
+		validateMobileExists(customer.getMobile(),BusinessType.注册);
+		verificationCodeService.settingVerificationInvalid(customer.getMobile(), verificationCode, BusinessType.注册);
+		//生成邀请码并做唯一性校验
+		String invitationCode = codeGeneratorService.getInvitationCode();  
+		while (findFirstByInvitationCode(invitationCode) != null) {
+			invitationCode = codeGeneratorService.getInvitationCode();
+		}
+		customer.setInvitationCode(invitationCode);
+		// 生成客户编号
+		String customerCode = codeGeneratorService.getCustomerCode();
+		while (findFirstByCustomerCode(customerCode) != null) {
+			customerCode = codeGeneratorService.getCustomerCode();
+		}
+		customer.setCustomerCode(customerCode);
+		Customer newCustomer = repository.save(customer);
+		if(newCustomer != null){
+			//创建用户的时候同时创建账户
+			accountService.saveNewAccount(newCustomer.getId());
+			messageService.sendMessage(MessageTemplateMessageType.用户注册, newCustomer.getId(), "");
+		}
+		return newCustomer;
+	}
+	
+	/**
+	 * 根据客户编号查询用户
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月24日 下午2:33:15
+	 * @param customerCode
+	 *            客户编号
+	 * @return
+	 */
+	public Customer findFirstByCustomerCode(String customerCode) {
+		return repository.findFirstByCustomerCode(customerCode);
+	}
+
+	/**
+	 * 验证手机号是否注册
+	 *
+	 * @param mobile
+	 * @throws SLException
+	 * @author SangLy
+	 * @createTime 2016年5月24日 下午3:53:15
+	 */
+	public void validateMobileExists(String mobile, BusinessType businessType) throws SLException {
+		if (BusinessType.注册.equals(businessType) && (repository.findByMobile(mobile) != null)) {
+			throw new SLException("120014", "This mobile had registered!");
+		}
+		if(BusinessType.找回密码.equals(businessType) && (repository.findByMobile(mobile) == null) ){
+			throw new SLException("120055", "This mobile had not registered!");
+		}
+		if(BusinessType.交易密码找回.equals(businessType) && (repository.findByMobile(mobile) == null) ){
+			throw new SLException("120055", "This mobile had not registered!");
+		}
+	}
+	
+	/**
+	 * 根据邀请码查询用户
+	 * @author SangLy
+	 * @createTime 2016年8月24日 下午2:33:15
+	 * @param invitationCode
+	 * @return
+	 */
+	public Customer findFirstByInvitationCode(String invitationCode){
+		return repository.findFirstByInvitationCode(invitationCode);
+	}
+	
+	/**
+	 * app-忘记密码(根据验证码重置密码)
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月15日 下午6:45:56
+	 * @param mobile
+	 *            手机号
+	 * @param verificationCode
+	 *            验证码
+	 * @param password
+	 *            密码
+	 * @throws SLException
+	 */
+	@Transactional
+	public void appResetPassword(String mobile, String verificationCode, String password) throws SLException {
+		Customer customer = repository.findByMobile(mobile);
+		if (customer == null) {
+			throw new SLException("120027", "Binding this mobile person is not exists in customer table!");
+		}
+		verificationCodeService.settingVerificationInvalid(mobile, verificationCode, BusinessType.找回密码);
+		customer.setPassword(password);
+		update(customer);
+	}
+	
+	/**
+	 *  app-修改密码(根据旧密码更新密码)
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月15日 下午6:52:24
+	 * @param oldPassword
+	 *            旧密码
+	 * @param newPassword
+	 *            新密码
+	 * @param loginUser
+	 *            登录用户
+	 * @throws SLException
+	 */
+	@Transactional
+	public void appUpdatePassword(String oldPassword, String password, LoginUser loginUser) throws SLException {
+		Customer customer = repository.getOne(loginUser.getId());
+		if (!oldPassword.equals(customer.getPassword())) {
+			throw new SLException("120031", "Old password is wrong!");
+		}
+		if (password.equals(oldPassword)) {
+			throw new SLException("120052", "New password can not be consistent with old password!");
+		}
+		customer.setPassword(password);
+		update(customer);
+	}
+	
+	/**
+	 * app-查找我的邀请记录
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月19日 下午3:28:04
+	 * @param pageRequest
+	 * @return
+	 */
+	public PageResponse<Map<String, Object>> appFindMyInvited(PageRequestVo pageRequest) {
+		return repository.appFindMyInvited(pageRequest);
+	}
+	
+	/**
+	 * 根据客户id查找客户信息
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月25日 下午7:51:48
+	 * @param customerId
+	 * @return
+	 */
+	public Customer findById(String customerId) {
+		return findOne(customerId);
+	}
+
+	/**
+	 * 设置客户状态
+	 * @author taoxm
+	 * @createTime 2016年8月30日 上午11:08:01
+	 * @param id
+	 * @param customerStatus
+	 * @return
+	 */
+	@Transactional
+	public Customer updateStatusById(String id, CustomerStatus customerStatus) {
+		Customer customer = findOne(id);
+		if(null == customer){
+			throw new SLException("100001");
+		}
+		customer.setStatus(customerStatus);
+		
+		return repository.save(customer);
+	}
+
+	/**
+	 * 查询客户列表
+	 * @author taoxm
+	 * @createTime 2016年8月30日 上午11:17:15
+	 * @param pageRequest
+	 * @return
+	 */
+	public PageResponse<Customer> findAllCustomer(PageRequestVo pageRequest) {
+		PageResponse<Customer> pageResponse = repository.findAllCustomer(pageRequest);
+		return pageResponse;
+	}
+	
+	public Customer findByMobile(String mobile){
+		return repository.findByMobile(mobile);
+	}
+}

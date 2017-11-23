@@ -1,0 +1,218 @@
+/** 
+ * @(#)Advertisement.java 1.0.0 2016年8月17日 上午11:22:19  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.controller;
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.collections.MapUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.slfinance.redpack.core.constants.TableConstant;
+import com.slfinance.redpack.core.constants.enums.CustomerRelationType;
+import com.slfinance.redpack.core.controller.base.BaseController;
+import com.slfinance.redpack.core.entities.Advertisement;
+import com.slfinance.redpack.core.entities.Advertiser;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.validate.annotations.Rule;
+import com.slfinance.redpack.core.extend.validate.annotations.Rules;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.AdvertisementPhotoService;
+import com.slfinance.redpack.core.services.AdvertisementService;
+import com.slfinance.redpack.core.services.AdvertiserService;
+import com.slfinance.redpack.core.services.CustomerRelationService;
+import com.slfinance.redpack.core.services.RedPackService;
+import com.slfinance.redpack.core.utils.FormatPrefixUrl;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年8月17日 上午11:22:19 $
+ */
+@RestController
+@RequestMapping(value = "advertisement", method = RequestMethod.POST)
+public class AdvertisementController extends BaseController {
+
+	@Autowired
+	AdvertisementService advertisementService;
+	
+	@Autowired
+	private AdvertisementPhotoService advertisementPhotoService;
+	
+	@Autowired
+	private CustomerRelationService customerRelationService;
+	
+	@Autowired
+	private RedPackService redpackService;
+	
+	@Autowired
+	private AdvertiserService advertiserService;
+
+	/**
+	 * app-获取启动页广告
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月17日 下午2:38:10
+	 * @return
+	 * @throws SLException
+	 */
+	@RequestMapping("findStartPageAdvertisement")
+	public ResponseVo appFindStartPageAdvertisement() throws SLException {
+		return ResponseVo.success("data", FormatPrefixUrl.addStaticResourceProxyURI(staticResourceProxyURI,advertisementService.appFindStartPageAdvertisementPhotoList(),new String []{"path"}));
+	}
+	
+	/**
+	 * app-获取广告详情 { "id":"cc03583e-2219-45fd-bac8-aeae3ff626d3" }
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月17日 下午3:38:55
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("detail")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "500010") })
+	public ResponseVo appDetail(@RequestBody Map<String, Object> params) throws SLException{
+		Map<String, Object> result = new HashMap<String, Object>();
+		Advertisement advertisement = advertisementService.findById(MapUtils.getString(params, "id"));
+		if (advertisement != null) {
+			result.put("id", advertisement.getId());
+			result.put("content", advertisement.getContent());
+			Advertiser advertiser = advertiserService.findById(advertisement.getAdvertiserId());
+			if(advertiser != null){
+				result.put("advertiserName", advertiser.getName());
+			}else{
+				result.put("advertiserName", "");
+			}
+			result.put("sharedURL", FormatPrefixUrl.addDomainNameAndFormatAppShareAdUrl(domainName,advertisement.getId(),""));
+			result.put("hyperlink", FormatPrefixUrl.addDomainNameAndFormatAppAdvertisementClickRedirectUrl(domainName,advertisement.getId(),advertisement.getHyperlink()));
+			result.put("advertisementPhoto", FormatPrefixUrl.addStaticResourceProxyURI(staticResourceProxyURI,advertisementPhotoService.findPathsByAdvertisementId(advertisement.getId()),new String []{"path"}));
+		}else{
+			throw new SLException("500011", "have not find advertisement");
+		}
+		return ResponseVo.success(result);
+	}
+	
+	/**
+	 * app-每日任务
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月18日 上午9:58:19
+	 * @return
+	 */
+	@RequestMapping("dailyTask")
+	public ResponseVo appDailyTask() {
+		Map<String, Object> result = new HashMap<String, Object>();
+		Advertisement advertisement = advertisementService.dailyQuest();
+		if (advertisement != null) {
+			result.put("shareAdvertisementId", advertisement.getId());
+			Date systemTime = new Date();
+			//是否完成分享任务
+			List<Map<String, Object>> hongbaofenxiangList = customerRelationService.findListCustomerIdAndRelateTableAndRelatePrimaryAndTypeAndDay(systemTime, getLoginUserId(), TableConstant.T_ADVERTISEMENT, advertisement.getId(), CustomerRelationType.广告分享);
+			if (hongbaofenxiangList.size() > 0) {
+				result.put("shareTaskFinish", true);
+			}else{
+				result.put("shareTaskFinish", false);
+			}
+			//是否完成分邀请任务
+			List<Map<String, Object>> hongbaoyaoqingList = customerRelationService.findListCustomerIdAndRelateTableAndTypeAndDay(systemTime, getLoginUserId(), CustomerRelationType.好友邀请);
+			List<Map<String, Object>> userRegisterLog = customerRelationService.findListRelatePrimaryAndRelateTableAndTypeAndDay(systemTime, getLoginUserId(), CustomerRelationType.好友邀请);
+			if (hongbaoyaoqingList.size() > 0 || userRegisterLog.size() > 0) {
+				result.put("inviteTaskFinish", true);
+			}else{
+				result.put("inviteTaskFinish", false);
+			}
+		}
+		return ResponseVo.success(result);
+	}
+	
+	/**
+	 * app-广告分享
+	 * @author SangLy
+	 * @createTime 2016年8月18日 下午6:40:19
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("share")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "500010") })
+	public ResponseVo appShare(@RequestBody Map<String, Object> params) {
+		advertisementService.appShare(MapUtils.getString(params, "id"),getLoginUserId());
+		return ResponseVo.success();
+	}
+	
+	/**
+	 * app-登录用户的分享
+	 * @author SangLy
+	 * @createTime 2016年8月18日 下午6:40:19
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("loginShare")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "500010") })
+	public ResponseVo appLoginShare(@RequestBody Map<String, Object> params) {
+		advertisementService.appShare(MapUtils.getString(params, "id"), getLoginUserId());
+		return ResponseVo.success();
+	}
+	
+	/**
+	 * app-点击广告
+	 * @author SangLy
+	 * @createTime 2016年8月18日 下午6:40:19
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("click")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "500010") })
+	public ResponseVo appClick(@RequestBody Map<String, Object> params) {
+		advertisementService.appClick(MapUtils.getString(params, "id"), getLoginUserId());
+		return ResponseVo.success();
+	}
+	
+	/**
+	 * app-获取广告详情 { "id":"cc03583e-2219-45fd-bac8-aeae3ff626d3" }
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月17日 下午3:38:55
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("detailByRedpackId")
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "600001") })
+	public ResponseVo appdetailByRedpackId(@RequestBody Map<String, Object> params) {
+		Map<String, Object> result = new HashMap<String, Object>();
+		RedPack redpack = redpackService.findById(MapUtils.getString(params, "id"));
+		if(redpack == null){
+			return ResponseVo.success(result);
+		}
+		Advertisement advertisement = advertisementService.findById(redpack.getAdvertisementId());
+		if (advertisement != null) {
+			result.put("id", advertisement.getId());
+			result.put("content", advertisement.getContent());
+			Advertiser advertiser = advertiserService.findById(advertisement.getAdvertiserId());
+			if(advertiser != null){
+				result.put("advertiserName", advertiser.getName());
+			}else{
+				result.put("advertiserName", "");
+			}
+			result.put("sharedURL", FormatPrefixUrl.addDomainNameAndFormatAppShareAdUrl(domainName,advertisement.getId(),redpack.getId()));
+			result.put("hyperlink", FormatPrefixUrl.addDomainNameAndFormatAppAdvertisementClickRedirectUrl(domainName,(String)advertisement.getId(),(String)advertisement.getHyperlink()));
+			result.put("advertisementPhoto", FormatPrefixUrl.addStaticResourceProxyURI(staticResourceProxyURI,advertisementPhotoService.findPathsByAdvertisementId(advertisement.getId()),new String []{"path"}));
+			// 获取系统时间
+			Date systemTime = new Date();
+			result.put("systemTime", systemTime.getTime());
+			result.put("timePoint", redpack.getTimePoint());
+		}
+		return ResponseVo.success(result);
+	}
+}

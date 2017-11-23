@@ -1,0 +1,25 @@
+package com.slfinance.redpack.core.services;
+
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+
+import com.slfinance.redpack.core.entities.File;
+import com.slfinance.redpack.core.repositories.FileRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+@Service
+public class FileService extends BaseService<File, FileRepository>{
+
+	/**
+	 * 根据关联表和关联主键查询文件信息
+	 * @param relateTable
+	 * @param relatePrimary
+	 * @return
+	 */
+	public List<Map<String, Object>> findByRelateTableAndRelatePrimary(String relateTable,String relatePrimary){
+		List<Map<String, Object>> result = repository.findByRelateTableAndRelatePrimary(relateTable, relatePrimary);
+		return result;
+	}
+}

@@ -1,0 +1,37 @@
+/** 
+ * @(#)RegionService.java 1.0.0 2016年11月3日 下午4:21:22  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import java.util.List;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
+
+import com.slfinance.redpack.core.entities.Region;
+import com.slfinance.redpack.core.repositories.RegionRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月3日 下午4:21:22 $
+ */
+@Service
+public class RegionService extends BaseService<Region, RegionRepository> {
+	public List<Region> findRegionListByParentCode(String parentCode) {
+		if (StringUtils.isBlank(parentCode)) {
+			parentCode = "0086";
+		}
+		return repository.findByParentCode(parentCode);
+	}
+	
+	public Region findByCode(String code){
+		return repository.findByCode(code);
+	}
+	
+}

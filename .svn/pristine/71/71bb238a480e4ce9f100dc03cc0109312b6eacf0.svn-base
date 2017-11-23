@@ -1,0 +1,39 @@
+/** 
+ * @(#)MessageService.java 1.0.0 2016年11月1日 下午5:53:39  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import org.springframework.stereotype.Service;
+
+import com.slfinance.redpack.core.entities.Message;
+import com.slfinance.redpack.core.repositories.MessageRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月1日 下午5:53:39 $
+ */
+@Service
+public class MessageService extends BaseService<Message, MessageRepository>{
+	
+	
+	/**
+	 * 
+	 * 统计未读信息个数
+	 * 
+	 * 
+	 * @author work
+	 * @createTime 2016年11月1日 下午6:17:32
+	 * @param isRead
+	 * @return
+	 */
+	public Long messageNoReadCount(String customerId) {
+		return repository.countByCustomerIdAndIsRead(customerId,0);
+	}
+
+}

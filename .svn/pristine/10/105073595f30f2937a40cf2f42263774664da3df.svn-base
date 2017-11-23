@@ -1,0 +1,104 @@
+buildscript {
+    ext {
+        springBootVersion = '1.3.3.RELEASE'
+    }
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'idea'
+apply plugin: 'spring-boot'
+apply plugin: 'eclipse-wtp'
+apply plugin: 'war'
+
+
+war {
+    baseName = 'services-core'
+    version = '0.0.1-SNAPSHOT'
+}
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+repositories {
+    mavenCentral()
+    maven {
+        url "http://192.16.150.201:8081/nexus/content/groups/public/"
+    }
+}
+
+configurations {
+    providedRuntime
+}
+
+dependencies {
+    //guava
+    compile "com.google.guava:guava:19.0"
+    //lombok
+    compile "org.projectlombok:lombok:1.16.6"
+    //common
+    compile "commons-beanutils:commons-beanutils:1.9.2"
+    compile "org.apache.commons:commons-lang3:3.1"
+    //datasource
+    compile "com.alibaba:druid:1.0.18"
+    //fastjson
+    compile "com.alibaba:fastjson:1.2.8"
+    //ehcache
+    compile "net.sf.ehcache:ehcache:2.9.0"
+    //oracle
+    runtime("com.oracle:ojdbc6:11.2.0.3.0")
+    //fileupload
+    compile "commons-fileupload:commons-fileupload:1.3.1"
+
+    //redpack-common
+    compile "com.slfinance.redpack:common:1.0.0"
+
+    //spring boot
+    compile('org.springframework.boot:spring-boot-starter-aop')
+    compile('org.springframework.boot:spring-boot-starter-cache')
+    compile('org.springframework.boot:spring-boot-starter-data-jpa')
+    compile('org.projectlombok:lombok:1.16.6')
+    compile('org.springframework.boot:spring-boot-starter-redis')
+    compile('org.springframework.boot:spring-boot-starter-validation')
+    compile('org.springframework.boot:spring-boot-starter-web')
+    compile('org.springframework.boot:spring-boot-starter-tomcat')
+    compile('org.springframework.boot:spring-boot-starter-mail')
+    compile('org.springframework.boot:spring-boot-starter-freemarker')
+   
+    testCompile('org.springframework.boot:spring-boot-starter-test')
+
+    //SMS
+    compile('org.apache.httpcomponents:httpcore:4.3')
+    compile('org.apache.httpcomponents:httpclient:4.3.1')
+    compile('org.apache.httpcomponents:httpmime:4.3.1')
+    
+    //jiguang push
+    compile 'cn.jpush.api:jpush-client:3.2.10'
+    
+    //quartz
+    compile "org.quartz-scheduler:quartz:2.2.1"
+	
+	//applicatipn restart
+//	compile("org.springframework.boot:spring-boot-devtools")
+
+	//alipay
+	compile "com.alipay:alipay.sdk.api:20160801120057"
+
+
+}
+
+
+eclipse {
+    classpath {
+        containers.remove('org.eclipse.jdt.launching.JRE_CONTAINER')
+        containers 'org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.7'
+    }
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.2'
+}

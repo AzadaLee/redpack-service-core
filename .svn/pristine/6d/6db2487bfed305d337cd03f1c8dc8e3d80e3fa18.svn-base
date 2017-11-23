@@ -1,0 +1,51 @@
+/** 
+ * @(#)DistributeService.java 1.0.0 2016年11月2日 上午11:32:16  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */ 
+
+package com.slfinance.redpack.core.services;
+
+import java.util.Date;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.core.entities.Distribute;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.repositories.DistributeRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+/**   
+ * 
+ *  
+ * @author  SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月2日 上午11:32:16 $ 
+ */
+@Service
+public class DistributeService extends BaseService <Distribute, DistributeRepository>{
+	
+	/**
+	 * 用户抢红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月7日 下午6:36:20
+	 * @param redpackId
+	 * @param customerId
+	 */
+	@Transactional
+	public Distribute robRedPack(String redpackId,String customerId) throws SLException{
+		//根据红包id查询最近一条应未分配记录
+		Distribute notDistribute = repository.findByAssigneeIsNullAndRedpackIdAndCreatedDateGreaterThanEqualOrderByOrderedAsc(redpackId,DateUtil.weedDayBelow(new Date()));
+		if(notDistribute != null){
+			notDistribute.setRedpackId(redpackId);
+			notDistribute.setAssignee(customerId);
+			notDistribute.setDistributeTime(new Date());
+			return repository.save(notDistribute);
+		}else{
+			throw new SLException("600049","红包被已经被抢光");
+		}
+	}
+	
+}

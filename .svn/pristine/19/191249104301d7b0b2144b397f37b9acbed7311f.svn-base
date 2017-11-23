@@ -1,0 +1,17 @@
+/** 
+ * @(#)AccountFlowflowType.java 1.0.0 2016年11月1日 下午1:22:55  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.constants.enums;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月1日 下午1:22:55 $
+ */
+public enum AccountFlowflowType {
+	发红包,充值,提现,红包冻结,红包解冻,提现冻结,提现解冻,充值手续费垫付,发红包手续费,红包退费,抢红包
+}

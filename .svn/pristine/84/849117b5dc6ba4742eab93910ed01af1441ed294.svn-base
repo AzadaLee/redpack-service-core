@@ -1,0 +1,49 @@
+/** 
+ * @(#)UploadController.java 1.0.0 2016年11月8日 下午2:57:11  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.controller;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.slfinance.redpack.core.constants.enums.UserType;
+import com.slfinance.redpack.core.controller.base.BaseController;
+import com.slfinance.redpack.core.entities.File;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.FileService;
+import com.slfinance.redpack.core.vo.FileUploadVo;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月8日 下午2:57:11 $
+ */
+@RestController
+@RequestMapping(value = "upload", method = RequestMethod.POST)
+public class UploadController extends BaseController {
+	
+	@Autowired
+	private FileService fileService;
+
+	@RequestMapping("/save")
+	public ResponseVo save(@RequestBody @Validated FileUploadVo fileUploadVo){
+		Map<String, Object> result = new HashMap<String, Object>();
+		File f = fileService.save(fileUploadVo,UserType.客户);
+		result.put("path", f.getPath());
+		File file = (File) fileService.doPathAndLogo(staticResourceProxyURI, null, f);
+		result.put("id", file.getId());
+		result.put("pathURL", file.getPath());
+		return ResponseVo.success(result);
+	}
+}

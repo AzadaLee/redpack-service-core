@@ -1,0 +1,12 @@
+package com.slfinance.redpack.core.services;
+
+import org.springframework.stereotype.Service;
+
+import com.slfinance.redpack.core.entities.AccountFlow;
+import com.slfinance.redpack.core.repositories.AccountFlowRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+@Service
+public class AccountFlowService extends BaseService<AccountFlow, AccountFlowRepository>{
+
+}

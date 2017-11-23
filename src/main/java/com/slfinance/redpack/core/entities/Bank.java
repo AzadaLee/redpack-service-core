@@ -1,0 +1,55 @@
+/** 
+ * @(#)Bank.java 1.0.0 2016年11月1日 下午1:28:14  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.entities;
+
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.Table;
+
+import com.slfinance.redpack.core.constants.enums.RecordType;
+import com.slfinance.redpack.core.constants.enums.BankType;
+import com.slfinance.redpack.core.entities.base.BaseEntity;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月1日 下午1:28:14 $
+ */
+@Entity
+@Table(name = "RP_T_BANK")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+public class Bank extends BaseEntity {
+
+	private static final long serialVersionUID = -5810000000000000001L;
+
+	private String customerId;
+	/**
+	 * 银行。（例如：中国银行）
+	 */
+	@Enumerated(EnumType.STRING)
+	private BankType bank;
+	private String province;
+	private String city;
+	private String bankName;
+	private String bankCode;
+	private String cardHolderName;
+
+	/**
+	 * BankRecordType
+	 */
+	@Enumerated(EnumType.STRING)
+	private RecordType recordType;
+
+}

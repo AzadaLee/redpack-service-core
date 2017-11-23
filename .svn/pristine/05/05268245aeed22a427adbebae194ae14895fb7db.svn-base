@@ -1,0 +1,114 @@
+/** 
+ * @(#)RedpackServiceTest.java 1.0.0 2016年8月16日 下午2:49:23  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import java.util.Date;
+
+import org.junit.Assert;
+import org.junit.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.core.CreditServiceCoreApplicationTests;
+import com.slfinance.redpack.core.constants.RedPackConstant;
+import com.slfinance.redpack.core.constants.enums.RedpackStatus;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年8月16日 下午2:49:23 $
+ */
+public class RedPackServiceTest extends CreditServiceCoreApplicationTests {
+
+	@Autowired
+	RedPackService redpackService;
+
+	/**
+	 * 根据传入的日期计算红包总发送次数
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午2:53:41
+	 * @param day
+	 *            日期
+	 * @return
+	 */
+	@Test
+	public void testTodayTotalCount() {
+		redpackService.todayTotalCount(new Date());
+	}
+
+	/**
+	 * 根据传入的日期计算红包总发送次数
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午2:53:41
+	 * @param day
+	 *            日期
+	 * @return
+	 */
+	@Test
+	public void testTodaySentCount() {
+		redpackService.todaySentCount(new Date());
+	}
+
+	/**
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:53:57
+	 */
+	@Test
+	public void testSpdateStatus(){
+		String id = "5dc23df8-b3d8-4299-8dd4-67765660a220";
+		String status = RedpackStatus.未开启.name();
+		Assert.assertTrue(redpackService.updateStatus(id, status) != null);
+	}
+
+	/**
+	 * 测试保存红包
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午10:03:07
+	 */
+	@Test
+	public void testSaveRedPacket(){
+		String advertisementCode = "dsb_aid0000000003";
+		RedPack redpack = new RedPack();
+		String id = "54ab9efe-9452-489d-a9ba-d59f32ceaea9";
+		redpack.setId(id);
+//		redpack.setTitle("service测试");
+//		redpack.setAmount(10000.00);
+//		redpack.setTimePoint(DateUtil.parseToDate("2016-09-01 10:30", "yyyy-MM-dd HH:mm"));
+//		redpack.setShibboleth("nicai");
+//		redpack.setTotalPersonTime(RedPackConstant.TOTAL_PERSON_TIME);
+		Assert.assertTrue(redpackService.saveRedPacket(redpack, advertisementCode,true) != null);
+	}
+	
+	
+	/**
+	 * 测试红包列表查询
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午10:24:07
+	 */
+	@Test
+	public void testFindAllPage(){
+		PageRequestVo pageRequest = new PageRequestVo();
+		Assert.assertTrue(redpackService.findAllPage(pageRequest) != null);
+	}
+	
+	/**
+	 * 测试查询单个红包和广告详情
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午10:34:03
+	 * @throws Exception
+	 */
+	@Test
+	public void testFindRedpackAndAdvertisementInfo() throws Exception{
+		String id = "5dc23df8-b3d8-4299-8dd4-67765660a220";
+		Assert.assertTrue(redpackService.findRedpackAndAdvertisementInfo(id) != null);
+	}
+}

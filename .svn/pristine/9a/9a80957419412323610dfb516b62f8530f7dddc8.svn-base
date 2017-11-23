@@ -1,0 +1,162 @@
+/** 
+ * @(#)MessageService.java 1.0.0 2016年11月1日 下午5:53:39  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import java.util.Calendar;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.slfinance.redpack.common.utils.FormatUtils;
+import com.slfinance.redpack.common.utils.StringUtil;
+import com.slfinance.redpack.core.constants.enums.MessageTemplateMessageType;
+import com.slfinance.redpack.core.entities.Advertisement;
+import com.slfinance.redpack.core.entities.Customer;
+import com.slfinance.redpack.core.entities.Message;
+import com.slfinance.redpack.core.entities.MessageTemplate;
+import com.slfinance.redpack.core.entities.Order;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.entities.Withdraw;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.repositories.MessageRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月1日 下午5:53:39 $
+ */
+@Service
+public class MessageService extends BaseService<Message, MessageRepository> {
+	@Autowired
+	MessageTemplateService messageTemplateService;
+	@Autowired
+	OrderService orderService;
+	@Autowired
+	RedPackService redPackService;
+	@Autowired
+	AdvertisementService advertisementService;
+	@Autowired
+	WithdrawService withdrawService;
+	@Autowired
+	CustomerService customerService;
+
+	/**
+	 * 
+	 * 统计未读信息个数
+	 * 
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月1日 下午6:17:32
+	 * @param isRead
+	 * @return
+	 */
+	public Long messageNoReadCount(String customerId) {
+		return repository.countByCustomerIdAndIsRead(customerId, 0);
+	}
+
+	/**
+	 * app-我的红包预约列表
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月19日 下午4:54:07
+	 * @param pageRequest
+	 * @return
+	 */
+	public PageResponse<Map<String, Object>> findMessagesListByUserId(PageRequestVo pageRequest) {
+		return repository.findMessagesListByUserId(pageRequest);
+	}
+
+	/**
+	 * 发送站内信
+	 * 
+	 * @author samson
+	 * @createTime 2016年11月14日 下午4:36:02
+	 * @param messageType
+	 *            站内信模版类型
+	 * @param customerId
+	 *            发送人id
+	 * @param relatePrimary
+	 *            关联主键id
+	 * 
+	 *            <pre>
+	 * 		MessageTemplateMessageType.充值成功||messageType == MessageTemplateMessageType.充值失败	:	订单id
+	 * 		MessageTemplateMessageType.未付款红包即将到期||MessageTemplateMessageType.确定红包时间||MessageTemplateMessageType.红包被驳回||MessageTemplateMessageType.红包通过审核||MessageTemplateMessageType.转出失败||MessageTemplateMessageType.转出成功: 红包id
+	 * 		messageType == MessageTemplateMessageType.用户注册:不传
+	 * 		MessageTemplateMessageType.邀请好友成功 :好友id
+	 * </pre>
+	 * @return
+	 */
+	public Message sendMessage(MessageTemplateMessageType messageType, String customerId, String relatePrimary) {
+		MessageTemplate messageTemplate = messageTemplateService.findOneByMessageTemplateMessageType(messageType);
+		if (messageTemplate == null) {
+			throw new SLException("", "not exists messageTemplate!");
+		}
+		String content = messageTemplate.getContent();
+		if (messageType == MessageTemplateMessageType.充值成功 || messageType == MessageTemplateMessageType.充值失败) {
+			Order order = orderService.findOne(relatePrimary);
+			Calendar c = Calendar.getInstance();
+			c.setTime(order.getCreatedDate());
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "month" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.MONTH) + "");
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "day" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.DAY_OF_MONTH) + "");
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "money" + MessageTemplateService.PLACEHOLDER_SUFFIX, order.getOrderAmount().toString());
+		} else if (messageType == MessageTemplateMessageType.未付款红包即将到期) {
+			Advertisement advertisement = advertisementService.findByRedpackId(relatePrimary);
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "redpack" + MessageTemplateService.PLACEHOLDER_SUFFIX, StringUtil.cutAndPadding(advertisement.getTitle(), 10, "...", "..."));
+		} else if (messageType == MessageTemplateMessageType.用户注册) {
+
+		} else if (messageType == MessageTemplateMessageType.确定红包时间) {
+			RedPack redPack = redPackService.findOne(relatePrimary);
+			Advertisement advertisement = advertisementService.findOne(redPack.getAdvertisementId());
+			Calendar c = Calendar.getInstance();
+			c.setTime(redPack.getTimePoint());
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "redpack" + MessageTemplateService.PLACEHOLDER_SUFFIX, StringUtil.cutAndPadding(advertisement.getTitle(), 10, "...", "..."));
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "month" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.MONTH) + "");
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "day" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.DAY_OF_MONTH) + "");
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "hour" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.MINUTE) + "");
+		} else if (messageType == MessageTemplateMessageType.红包被驳回) {
+			RedPack redPack = redPackService.findOne(relatePrimary);
+			Advertisement advertisement = advertisementService.findOne(redPack.getAdvertisementId());
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "redpack" + MessageTemplateService.PLACEHOLDER_SUFFIX, StringUtil.cutAndPadding(advertisement.getTitle(), 10, "...", "..."));
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "rejectReason" + MessageTemplateService.PLACEHOLDER_SUFFIX, redPack.getMemo());
+		} else if (messageType == MessageTemplateMessageType.红包通过审核) {
+			RedPack redPack = redPackService.findOne(relatePrimary);
+			Advertisement advertisement = advertisementService.findOne(redPack.getAdvertisementId());
+			Calendar c = Calendar.getInstance();
+			c.setTime(redPack.getTimePoint());
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "redpack" + MessageTemplateService.PLACEHOLDER_SUFFIX, StringUtil.cutAndPadding(advertisement.getTitle(), 10, "...", "..."));
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "month" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.MONTH) + "");
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "day" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.DAY_OF_MONTH) + "");
+		} else if (messageType == MessageTemplateMessageType.转出失败) {
+			Withdraw withdrawth = withdrawService.findOne(relatePrimary);
+			Calendar c = Calendar.getInstance();
+			c.setTime(withdrawth.getCreatedDate());
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "month" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.MONTH) + "");
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "day" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.DAY_OF_MONTH) + "");
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "rejectReason" + MessageTemplateService.PLACEHOLDER_SUFFIX, withdrawth.getMemo());
+
+		} else if (messageType == MessageTemplateMessageType.转出成功) {
+			Withdraw withdrawth = withdrawService.findOne(relatePrimary);
+			Calendar c = Calendar.getInstance();
+			c.setTime(withdrawth.getCreatedDate());
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "month" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.MONTH) + "");
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "day" + MessageTemplateService.PLACEHOLDER_SUFFIX, c.get(Calendar.DAY_OF_MONTH) + "");
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "money" + MessageTemplateService.PLACEHOLDER_SUFFIX, withdrawth.getAmount() + "");
+		} else if (messageType == MessageTemplateMessageType.邀请好友成功) {
+			Customer customer = customerService.findOne(relatePrimary);
+			content = StringUtil.replaceOnce(content, MessageTemplateService.PLACEHOLDER_PREFIX + "friend" + MessageTemplateService.PLACEHOLDER_SUFFIX, FormatUtils.markMobile(customer.getMobile()));
+		}
+		Message message = new Message(customerId, relatePrimary, messageTemplate.getId(), content);
+		message = repository.save(message);
+		return message;
+	}
+
+}

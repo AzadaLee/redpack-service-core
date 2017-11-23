@@ -1,0 +1,66 @@
+/**
+ * @(#)Advertiser.java 1.0.0 2016年7月25日 上午10:43:01
+ * <p/>
+ * Copyright © 2016 善林金融.  All rights reserved.
+ */
+
+package com.slfinance.redpack.core.entities;
+
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.Table;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import com.slfinance.redpack.core.constants.enums.AdvertiserStatus;
+import com.slfinance.redpack.core.entities.base.BaseEntity;
+
+/**
+ * 广告主表(打广告的人)
+ *
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 上午10:43:01 $
+ */
+@Entity
+@Table(name = "RP_T_ADVERTISER")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+public class Advertiser extends BaseEntity {
+
+    private static final long serialVersionUID = -5000000000000000003L;
+
+    /**
+     * 广告主编号
+     */
+    private String advertiserCode;
+
+    /**
+     * 广告主名称
+     */
+    private String name;
+
+    /**
+     * 广告主手机号
+     */
+    private String mobile;
+
+    /**
+     * 广告主地址
+     */
+    private String address;
+
+    /**
+     * LOGO
+     */
+    private String logo;
+
+    /**
+     * 广告主状态
+     */
+    @Enumerated(EnumType.STRING)
+    private AdvertiserStatus status = AdvertiserStatus.新建;
+}

@@ -1,0 +1,5 @@
+package com.slfinance.redpack.core.constants.enums;
+
+public enum AdvertisementRecordType {
+	正本,副本
+}

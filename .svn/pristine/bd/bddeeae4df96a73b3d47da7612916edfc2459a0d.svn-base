@@ -1,0 +1,12 @@
+package com.slfinance.redpack.core.services;
+
+import org.springframework.stereotype.Service;
+
+import com.slfinance.redpack.core.entities.Withdraw;
+import com.slfinance.redpack.core.repositories.WithdrawRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+@Service
+public class WithdrawService extends BaseService<Withdraw, WithdrawRepository>{
+
+}

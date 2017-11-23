@@ -1,0 +1,99 @@
+/** 
+ * @(#)RedPackUtils.java 1.0.0 2016年8月26日 上午9:09:05  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.utils;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+import com.slfinance.redpack.common.utils.DigestUtil;
+import com.slfinance.redpack.core.constants.RedPackConstant;
+import com.slfinance.redpack.core.constants.enums.BusinessType;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.validate.RuleUtils;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年8月26日 上午9:09:05 $
+ */
+public class RedPackUtils {
+
+	/**
+	 * 项目密码加密
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月26日 上午9:15:17
+	 * @param password
+	 * @return
+	 * @throws SLException
+	 */
+	public static String encryptionPassword(String password,BusinessType businessType) throws SLException {
+		String decodePassword = DigestUtil.aesDecode(password); // 先解码
+		//校验密码规则
+		if (RuleUtils.isPassword(decodePassword, businessType)) {
+			return DigestUtil.encryptPassword(decodePassword); // 在加密
+		} else {
+			throw new SLException("400008", "password wrong");
+		}
+	}
+	
+	/**
+	 * 生成红包开启时间
+	 * @author work
+	 * @createTime 2016年11月11日 下午5:04:26
+	 * @param today
+	 * @param timePoint
+	 * @return
+	 */
+	public static Date getTimePoint(Date today,String timePoint){
+		SimpleDateFormat sdf  =   new  SimpleDateFormat( "yyyy-MM-dd" ); 
+		SimpleDateFormat sdf1  =   new  SimpleDateFormat( "yyyy-MM-dd HH:mm:ss" ); 
+		String newPoint = sdf.format(today)+timePoint; 
+		try {
+		     return sdf1.parse(newPoint);
+		} catch (Exception e) {
+			throw new SLException("600052","开启时间点转换成日期失败");
+		}
+		
+	}
+	
+	/**
+	 * 获取当前时间距离最近的下一个最近红包时间点
+	 * 
+	 * @author work
+	 * @createTime 2016年11月12日 下午5:22:42
+	 * @return
+	 */
+	public static Date getNextTimePoint(Date time) {
+		SimpleDateFormat sdf1 = new SimpleDateFormat("yyyy-MM-dd HH");
+		SimpleDateFormat sdf2 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		Date timePoint = new Date();
+		try {
+			Date nowTime = sdf2.parse(sdf1.format(new Date()) + ":00:00");
+			for (int i = 0; i < RedPackConstant.REDPACK_TIME_POINT.length; i++) {
+				timePoint = RedPackUtils.getTimePoint(time, RedPackConstant.REDPACK_TIME_POINT[i]);
+				if (i == 0) {
+					if (nowTime.getTime() < timePoint.getTime()) {
+						break;
+					}
+				}
+				if (i == RedPackConstant.REDPACK_TIME_POINT.length - 1) {
+					timePoint = null;
+					break;
+				}
+				if ((nowTime.equals(timePoint))) {
+					timePoint = RedPackUtils.getTimePoint(time, RedPackConstant.REDPACK_TIME_POINT[i + 1]);
+					break;
+				}
+			}
+		} catch (Exception e) {
+			throw new SLException("", " 获取当前时间距离最近的下一个最近红包时间点");
+		}
+		return timePoint;
+	}
+}

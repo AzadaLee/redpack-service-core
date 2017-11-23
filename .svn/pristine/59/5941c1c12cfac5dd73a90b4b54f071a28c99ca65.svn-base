@@ -1,0 +1,139 @@
+/** 
+ * @(#)RedPackController.java 1.0.0 2016年8月16日 下午3:24:24  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+package com.slfinance.redpack.core.controller.crm;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.beanutils.BeanUtils;
+import org.apache.commons.collections.MapUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.slfinance.redpack.common.utils.MapUtil;
+import com.slfinance.redpack.core.constants.enums.AdvertiserStatus;
+import com.slfinance.redpack.core.controller.base.BaseController;
+import com.slfinance.redpack.core.entities.Advertiser;
+import com.slfinance.redpack.core.extend.fastjson.Serialize;
+import com.slfinance.redpack.core.extend.fastjson.SerializeRule;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.extend.validate.annotations.Rule;
+import com.slfinance.redpack.core.extend.validate.annotations.Rules;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.AdvertiserService;
+import com.slfinance.redpack.core.services.CodeGeneratorService;
+
+/**
+ * @author taoxm 广告主controller
+ */
+@RestController("crmAdvertiserController")
+@RequestMapping(value = "/crm/advertiser", method = RequestMethod.POST)
+public class AdvertiserController extends BaseController {
+
+	@Autowired
+	private AdvertiserService advertiserService;
+
+	@Autowired
+	private CodeGeneratorService codeGeneratorService;
+
+	/**
+	 * 查询广告主列表
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午3:15:50
+	 * @param pageRequest
+	 * @return
+	 */
+	@RequestMapping("/findAllPage")
+	@Serialize({ @SerializeRule(clazz = Advertiser.class, include = { "id", "advertiserCode", "name", "logo", "createdDate" }) })
+	public ResponseVo findAllPage(PageRequestVo pageRequest) {
+		PageResponse<Advertiser> pageResponse = advertiserService.findAllPage(pageRequest);
+		return ResponseVo.success(pageResponse);
+	}
+
+	/**
+	 * 广告主保存(新建个修改)
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午3:16:09
+	 * @param params
+	 * @return
+	 * @throws Exception
+	 */
+	@RequestMapping("/save")
+	@Rules(value = { @Rule(name = "name", required = true, requiredMessage = "300002",maxLength = 10,maxLengthMessage = "300008"), @Rule(name = "logo", required = true, requiredMessage = "300003") })
+	public ResponseVo save(@RequestBody Map<String, Object> params) throws Exception {
+		Advertiser advertiser = null;
+		boolean isSave = false;//是否为新广告主(默认为修改广告主)
+		if (StringUtils.isBlank(MapUtil.getString(params, "id"))) {// 新建广告主
+			isSave = true;
+			advertiser = new Advertiser();
+			BeanUtils.populate(advertiser, params);
+			String advertiserCode = codeGeneratorService.getAdvertiserCode();
+			advertiser.setAdvertiserCode(advertiserCode);
+		} else {// 修改广告主
+			advertiser = advertiserService.findOne((String) params.get("id"));
+			advertiser.setName(MapUtils.getString(params, "name"));
+			advertiser.setLogo(MapUtils.getString(params, "logo"));
+		}
+		advertiserService.saveAdvertiser(advertiser,isSave);
+		return ResponseVo.success();
+	}
+
+	/**
+	 * 广告主删除
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午3:16:49
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("/del")
+	@Rules(value = { @Rule(name = "id", required = true, requiredMessage = "300001") })
+	public ResponseVo del(@RequestBody Map<String, Object> params) {
+		String id = MapUtils.getString(params, "id");
+		advertiserService.del(id);
+		return ResponseVo.success();
+	}
+
+	/**
+	 * 获取所有广告主(作为下拉框数据使用)
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午3:18:55
+	 * @return
+	 */
+	@Serialize({ @SerializeRule(clazz = Advertiser.class, include = { "id", "name" }) })
+	@RequestMapping("/findAll2Select")
+	public ResponseVo findAll2Select() {
+		List<String> status = new ArrayList<String>();
+		status.add(AdvertiserStatus.新建.name());
+		return ResponseVo.success(advertiserService.findAll2Select(status));
+	}
+
+	/**
+	 * 查找单个广告主信息
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月16日 下午3:19:18
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("/findOneDetail")
+	@Serialize({ @SerializeRule(clazz = Advertiser.class, include = { "id", "name", "logo" }) })
+	@Rules({ @Rule(name = "id", required = true, requiredMessage = "300001") })
+	public ResponseVo findOneDetail(@RequestBody Map<String, Object> params) {
+		String id = MapUtils.getString(params, "id");
+		Advertiser advertiser = advertiserService.findOne(id);
+		return ResponseVo.success(advertiser);
+	}
+}

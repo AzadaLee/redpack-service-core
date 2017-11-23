@@ -1,0 +1,1254 @@
+/** 
+ * @(#)RedpackService.java 1.0.0 2016年7月26日 上午10:01:03  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.collections.MapUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.common.utils.MapUtil;
+import com.slfinance.redpack.core.constants.CommonConstant;
+import com.slfinance.redpack.core.constants.RedPackConstant;
+import com.slfinance.redpack.core.constants.RedpackRecordStatus;
+import com.slfinance.redpack.core.constants.TableConstant;
+import com.slfinance.redpack.core.constants.enums.AccountFlowTradeDirection;
+import com.slfinance.redpack.core.constants.enums.AccountFlowflowType;
+import com.slfinance.redpack.core.constants.enums.AmountOrder;
+import com.slfinance.redpack.core.constants.enums.CustomerRelationType;
+import com.slfinance.redpack.core.constants.enums.OrderDetailCategory;
+import com.slfinance.redpack.core.constants.enums.OrderType;
+import com.slfinance.redpack.core.constants.enums.RedpackStatus;
+import com.slfinance.redpack.core.constants.enums.RedpackType;
+import com.slfinance.redpack.core.constants.enums.UserType;
+import com.slfinance.redpack.core.entities.Account;
+import com.slfinance.redpack.core.entities.AccountFlow;
+import com.slfinance.redpack.core.entities.Advertisement;
+import com.slfinance.redpack.core.entities.AdvertisementAnswer;
+import com.slfinance.redpack.core.entities.Distribute;
+import com.slfinance.redpack.core.entities.FileRelation;
+import com.slfinance.redpack.core.entities.Order;
+import com.slfinance.redpack.core.entities.OrderDetail;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.repositories.RedPackRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+import com.slfinance.redpack.core.utils.RedPackUtils;
+import com.slfinance.redpack.core.vo.RedPackExportExcelVo;
+
+
+/**
+ * 红包
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月26日 上午10:01:03 $
+ */
+@Service
+public class RedPackService extends BaseService<RedPack, RedPackRepository> {
+
+	@Autowired
+	private CodeGeneratorService codeGeneratorService;
+	
+	@Autowired
+	private AdvertisementService advertisementService;
+
+	@Autowired
+	private CustomerRelationService customerRelationService;
+	
+	@Autowired
+	private AdvertisementAnswerService advertisementAnswerService;
+
+	@Autowired
+	private FileService fileService;
+	
+	@Autowired
+	private AccountService accountService;
+	
+	@Autowired
+	private AccountFlowService accountFlowService;
+	
+	@Autowired
+	private DistributeService distributeService;
+	
+	@Autowired
+	private OrderService orderService;
+	
+	@Autowired
+	private OrderDetailService orderDetailService;
+	
+	@Autowired
+	private FileRelationService fileRelationService;
+	
+	/**
+	 * 设置红包状态
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午1:50:12
+	 * @param id
+	 * @param status
+	 * @return
+	 */
+	@Transactional
+	public RedPack updateStatus(String id, String status) {
+		RedPack redpack = findOne(id);
+		if (null == redpack) {
+			throw new SLException("600003");
+		}
+		//0、只能修改后台用户创建的红包
+		if(redpack.getUserType() != UserType.员工){
+			throw new SLException("600049");
+		}
+		// 1、只有当红包状态为未开启的时候，才能修改状态
+		if (redpack.getStatus() != RedpackStatus.审核通过) {
+			throw new SLException("600013");
+		}
+		// 2、只能将红包的状态修改为"已下架"
+		if (RedpackStatus.valueOf(status) != RedpackStatus.已失效) {
+			throw new SLException("600014");
+		}
+		// 3、当天的红包不能下架
+		if (DateUtil.getToday().compareTo(DateUtil.parseToDate(new SimpleDateFormat("yyyy-MM-dd").format(redpack.getTimePoint()), "yyyy-MM-dd")) == 0) {
+			throw new SLException("600019");
+		}
+		redpack.setStatus(RedpackStatus.valueOf(status));
+		return save(redpack);
+	}
+	
+	/**
+	 * 新建和修改红包
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午1:50:27
+	 * @param redpack
+	 *            红包对象实体
+	 * @param advertisementCode
+	 *            广告编码
+	 * @param isSave
+	 *            true ? 新建红包:修改红包
+	 */
+	@Transactional
+	public RedPack saveRedPacket(RedPack redpack, String advertisementId, boolean isSave,String customerId) {
+		//1、查询广告信息是否存在
+		Advertisement advertisement = advertisementService.findById(advertisementId);
+		if (advertisement == null) {
+			throw new SLException("500009");
+		}
+		Integer smallCount = redpack.getSmallCount();
+		Double smallAmount = redpack.getSmallAmount();
+		Integer bigCount = redpack.getBigCount();
+		Double bigAmount = redpack.getBigAmount();
+		Double tradeAmount = smallAmount*smallCount + bigAmount*bigCount;//红包总额
+		//2、创建红包
+		if (isSave) {
+			//2.0一天只能创建一个邀请红包，一个分享红包
+			if(RedpackType.分享红包 == redpack.getRedpackType() || RedpackType.邀请红包 == redpack.getRedpackType()){
+				int shareOrInviteRedPackCounts = repository.findByRedpackTypeWithCreateDateIsToday(redpack.getRedpackType().name());
+				if(shareOrInviteRedPackCounts > 0){
+					throw new SLException("500017");
+				}
+			}
+			//2.1、对红包类型做相应的业务处理
+			if(RedpackType.土豪红包 == redpack.getRedpackType()){
+				//土豪红包大奖人数10起
+				if(bigCount.compareTo(new Integer(10))<0){
+					throw new SLException("600041");
+				}
+				//金额必须大于200的正整数
+				if(tradeAmount.compareTo(new Double(200))<0 || tradeAmount.compareTo(new Double(String.valueOf(tradeAmount.intValue())))!=0){
+					throw new SLException("600042");
+				}
+			}else if(RedpackType.经济红包 == redpack.getRedpackType()){
+				//经济红包大奖人数1起
+				if(bigCount.compareTo(new Integer(1))<0){
+					throw new SLException("600043");
+				}
+				//小奖人数最多大奖人数的20倍
+				if(smallCount.compareTo(bigCount*20)>0){
+					throw new SLException("600044");
+				}
+			}
+			redpack.setAmount(tradeAmount);
+			redpack.setRedpackCode(codeGeneratorService.getRedPackCode());
+			if(redpack.getUserType() == UserType.客户){
+				redpack.setStatus(RedpackStatus.待付款);//前台手机用户创建红包默认状态为待付款
+			}else{
+				redpack.setStatus(RedpackStatus.审核通过);//默认审核通过
+			}
+			if (DateUtil.addMinutes(redpack.getTimePoint(), -RedPackConstant.REDPACK_SAVE_BEFORE_NOW_MINS).compareTo(new Date()) < 0) {
+				throw new SLException("600016");
+			}
+			
+			//2.2如果为创建红包则赋值广告副本，防止修改时影响之前的红包
+			Advertisement newAdvertisement = advertisementService.copyAdvertisement(advertisement);
+			List<AdvertisementAnswer> advertisementAnswerList = advertisementAnswerService.findAnswerListByAdvertisementId(advertisement.getId());
+			for(AdvertisementAnswer advertisementAnswer: advertisementAnswerList){
+				//复制广告答案副本,并且把广告副本的答案指向答案副本
+				AdvertisementAnswer newAdvertisementAnswer = advertisementAnswerService.copyAdvertisementAnswerByAdvertisement(advertisementAnswer,newAdvertisement.getId());
+				if(newAdvertisementAnswer.getAnswerContent().equals(advertisementAnswerService.findOne(newAdvertisement.getCorrectAnswer()).getAnswerContent())){
+					newAdvertisement.setCorrectAnswer(newAdvertisementAnswer.getId());
+					advertisementService.save(newAdvertisement);
+				}
+			}
+			// (广告副本和新文件记录做关联)
+			List<FileRelation> fileRelationList = fileRelationService.findByAdvertisementAndRelatePrimary(advertisement.getId());
+			for (FileRelation fileRelation : fileRelationList) {
+				FileRelation newFileRelation = new FileRelation();
+				newFileRelation.setRelateTable(TableConstant.T_ADVERTISEMENT);
+				newFileRelation.setRelatePrimary(newAdvertisement.getId());
+				newFileRelation.setFileId(fileRelation.getFileId());
+				fileRelationService.save(newFileRelation);
+			}
+			advertisementId = newAdvertisement.getId();
+			//2.3、扣款（后台用户直接扣款，前台用户冻结），并记录流水
+			Account account = null;
+			//2.3.1、判断账户信息
+			if(redpack.getUserType() == UserType.客户){
+				account = accountService.findBycustomerId(customerId);
+			}else{
+				account = accountService.findOne(CommonConstant.SYSTEM_ACCOUNT_ID);
+			}
+			if(null == account){
+				throw new SLException("110003");
+			}
+			
+			//记录流水
+			AccountFlow accountFlow = new AccountFlow();
+			if(redpack.getUserType() == UserType.客户){
+				//2.3.2、判断账户余额是否足够
+				if(account.getAvailableAmount().compareTo(tradeAmount)<0){
+					throw new SLException("110011");
+				}
+				//扣款
+				account.setAvailableAmount(account.getAvailableAmount()-tradeAmount);
+				account.setFreezeAmount(account.getFreezeAmount()+tradeAmount);
+				
+				accountFlow.setTotalAmount(account.getTotalAmount());
+				accountFlow.setFlowType(AccountFlowflowType.红包冻结);
+				accountFlow.setOldFlowCode(null);
+				accountFlow.setRelatePrimary(customerId);
+				accountFlow.setMemo("前台用户创建红包");
+			}else{
+				//2.3.2、判断账户余额是否足够
+				if(account.getTotalAmount().compareTo(tradeAmount)<0){
+					throw new SLException("110011");
+				}
+				//扣款
+				account.setTotalAmount(account.getTotalAmount()-tradeAmount);
+				account.setAvailableAmount(account.getAvailableAmount()-tradeAmount);
+				
+				accountFlow.setTotalAmount(account.getTotalAmount()-tradeAmount);
+				accountFlow.setFlowType(AccountFlowflowType.发红包);
+				accountFlow.setOldFlowCode(null);
+				accountFlow.setRelatePrimary(null);
+				accountFlow.setMemo("后台用户创建红包");
+			}
+			accountFlow.setTradeAmount(tradeAmount);
+			accountFlow.setAvailableAmount(account.getAvailableAmount()-tradeAmount);
+			accountFlow.setFreezeAmount(account.getFreezeAmount());
+			accountFlow.setTradeDirection(AccountFlowTradeDirection.支出);
+			accountFlow.setAccountId(account.getId());
+			accountFlow.setFlowCode(codeGeneratorService.getFlowCode());
+			//保存账户和流水信息
+			accountService.save(account);
+			accountFlowService.save(accountFlow);
+		}else {
+			if(redpack.getUserType() != UserType.员工){
+				throw new SLException("600049");
+			}
+			if (DateUtil.addMinutes(redpack.getTimePoint(), -RedPackConstant.REDPACK_MODIFY_BEFORE_NOW_MINS).compareTo(new Date()) < 0) {
+				throw new SLException("600009");
+			}
+		}
+		//红包修改时只能修改红包广告信息
+		redpack.setAdvertisementId(advertisementId);
+		//3、扣款（后台用户直接扣掉，前台用户进行冻结）
+		//4、记录流水
+		return save(redpack);
+	}
+	
+	
+	/**
+	 * 新建和修改红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月17日 下午1:50:27
+	 * @param redpack
+	 *            红包对象实体
+	 * @param advertisementId
+	 *            id
+	 */
+	@Transactional
+	public RedPack appSaveRedPacket(Map<String, Object> params, String customerId) throws SLException{
+		// 查询广告信息是否存在
+		Advertisement advertisement = advertisementService.findById(MapUtil.getStringTrim(params, "id"));
+		if (advertisement == null) {
+			throw new SLException("500009");
+		}
+		RedPack redpack = new RedPack();
+		redpack.setAdvertisementId(MapUtils.getString(params, "id"));
+		redpack.setTimePoint(DateUtil.parseToDate(MapUtil.getStringTrim(params, "timePoint"), "yyyy-MM-dd"));
+		redpack.setRedpackType(RedpackType.valueOf(MapUtil.getString(params, "redpackType")));
+		redpack.setBigAmount(MapUtil.getDouble(params, "bigAmount"));
+		redpack.setBigCount(MapUtil.getInteger(params, "bigCount"));
+		redpack.setSmallAmount(MapUtil.getDouble(params, "smallAmount"));
+		redpack.setSmallCount(MapUtil.getInteger(params, "smallCount"));
+		redpack.setStatus(RedpackStatus.待付款);
+		redpack.setUserType(UserType.客户);
+		redpack.setCreatedUser(customerId);
+		redpack.setRecordStatus(RedpackRecordStatus.正常);
+
+		Integer smallCount = redpack.getSmallCount();
+		Double smallAmount = redpack.getSmallAmount();
+		Integer bigCount = redpack.getBigCount();
+		Double bigAmount = redpack.getBigAmount();
+		Double tradeAmount = smallAmount * smallCount + bigAmount * bigCount;// 红包总额
+		if (RedpackType.土豪红包 == redpack.getRedpackType()) {
+			// 土豪红包大奖人数10起
+			if (bigCount.compareTo(new Integer(10)) < 0) {
+				throw new SLException("600041");
+			}
+			// 金额必须大于200的正整数
+			if (tradeAmount.compareTo(new Double(200)) < 0 || tradeAmount.compareTo(new Double(String.valueOf(tradeAmount.intValue()))) != 0) {
+				throw new SLException("600042");
+			}
+		} else if (RedpackType.经济红包 == redpack.getRedpackType()) {
+			// 经济红包大奖人数1起
+			if (bigCount.compareTo(new Integer(1)) < 0) {
+				throw new SLException("600043");
+			}
+			// 小奖人数最多大奖人数的20倍
+			if (smallCount.compareTo(bigCount * 20) > 0) {
+				throw new SLException("600044");
+			}
+		}else{
+			throw new SLException("600051","不支持的红包类型");
+		}
+		redpack.setAmount(tradeAmount);
+		redpack.setRedpackCode(codeGeneratorService.getRedPackCode());
+
+		if (DateUtil.addMinutes(redpack.getTimePoint(), -RedPackConstant.REDPACK_SAVE_BEFORE_NOW_MINS).compareTo(new Date()) < 0) {
+			throw new SLException("600016");
+		}
+		// 添加广告副本，用于新建创建红包
+		Advertisement newAdvertisement = advertisementService.copyAdvertisement(advertisement);
+		List<AdvertisementAnswer> advertisementAnswerList = advertisementAnswerService.findAnswerListByAdvertisementId(advertisement.getId());
+		for(AdvertisementAnswer advertisementAnswer: advertisementAnswerList){
+			//复制广告答案副本,并且把广告副本的答案指向答案副本
+			AdvertisementAnswer newAdvertisementAnswer = advertisementAnswerService.copyAdvertisementAnswerByAdvertisement(advertisementAnswer,newAdvertisement.getId());
+			if(newAdvertisementAnswer.getAnswerContent().equals(advertisementAnswerService.findOne(newAdvertisement.getCorrectAnswer()).getAnswerContent())){
+				newAdvertisement.setCorrectAnswer(newAdvertisementAnswer.getId());
+				advertisementService.save(newAdvertisement);
+			}
+		}
+		// (广告副本和新文件记录做关联)
+		List<FileRelation> fileRelationList = fileRelationService.findByAdvertisementAndRelatePrimary(advertisement.getId());
+		for (FileRelation fileRelation : fileRelationList) {
+			FileRelation newFileRelation = new FileRelation();
+			newFileRelation.setRelateTable(TableConstant.T_ADVERTISEMENT);
+			newFileRelation.setRelatePrimary(newAdvertisement.getId());
+			newFileRelation.setFileId(fileRelation.getFileId());
+			fileRelationService.save(newFileRelation);
+		}
+		// 红包表添加记录
+		redpack.setAdvertisementId(newAdvertisement.getId());
+		RedPack newRedpack = repository.save(redpack);
+
+		// 查询账户余额是否够支付（红包金额+手续费）
+		Account account = accountService.findBycustomerId(customerId);
+		if (null == account) {
+			throw new SLException("110003");
+		}
+		if (account.getAvailableAmount().compareTo(tradeAmount*(1+RedPackConstant.REDPACK_PAY_RATE)) < 0) {
+			throw new SLException("110011");
+		}
+
+		// 创建订单(订单表添加记录)
+		Order order = new Order();
+		order.setCustomerId(customerId);
+		order.setRelatePrimary(newRedpack.getId());
+		order.setOrderAmount(new BigDecimal(newRedpack.getAmount() * (1 + RedPackConstant.REDPACK_PAY_RATE)).setScale(2, BigDecimal.ROUND_HALF_UP).doubleValue()); // 20%的手续费
+		order.setSubject("发红包");
+		order.setOrderType(OrderType.发红包);
+		Order newOrder = orderService.save(order);
+
+		// 红包详情添加2条记录,一条是红包金额。一条是手续费
+		OrderDetail orderDetail = new OrderDetail();
+		orderDetail.setOrderId(newOrder.getId());
+		orderDetail.setCategory(OrderDetailCategory.发红包);
+		orderDetail.setAmount(newRedpack.getAmount());
+		orderDetailService.save(orderDetail);
+
+		OrderDetail orderDetail2 = new OrderDetail();
+		orderDetail2.setOrderId(newOrder.getId());
+		orderDetail2.setCategory(OrderDetailCategory.发红包手续费);
+		orderDetail2.setAmount(newOrder.getOrderAmount() - newRedpack.getAmount());
+		orderDetailService.save(orderDetail2);
+		return newRedpack;
+	}
+	
+	/**
+	 * 判断红包口令是否合法 合法口令：
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月31日 下午5:32:24
+	 * @param shibboleth
+	 * @return
+	 */
+//	private boolean isShibbolethValid(RedPack redpack, boolean isSave) {
+//		boolean flag = true;// 备扩展用
+		// 1、是否和为开启的红包口令重复
+//		String shibboleth = redpack.getShibboleth();
+//		List<RedPack> redPacks = findByStatusAndShibboleth(RedpackStatus.未开启, shibboleth);
+//		if (redPacks != null && redPacks.size() > 0) {
+//			if (isSave) {
+//				throw new SLException("600027");
+//			} else {// 修改红包时，判断口令相同的红包是不是正在修改的红包
+//				for (RedPack r : redPacks) {
+//					if (!r.getId().equals(redpack.getId())) {
+//						throw new SLException("600027");
+//					}
+//				}
+//			}
+//		}
+//		/*
+//		 * 2、口令格式 1)、中文1~6位+数字8位(数字必须是8位，且数字不能重复) 2)、8位纯数字(不能重复)
+//		 * 总结：1、必须以数字结尾，2、数字必须是8位，且不能重复，3、若已中文开头，必须是小于等于6位
+//		 */
+//		// 2.1、不能有空格
+//		if (shibboleth.indexOf(" ") >= 0) {
+//			throw new SLException("600026");
+//		}
+//		String numberString = shibboleth.substring(shibboleth.length() - 8);
+//		String charString = shibboleth.substring(0, shibboleth.length() - 8);// 如果为口令为8位纯数字，该字符串为空
+//		// 2.2、后8位是否全为数字
+//		if (!isAllNumberString(numberString)) {
+//			throw new SLException("600028");
+//		}
+		// 2.3、后8位数字不能重复
+//		if (hasRepeatChar(numberString)) {
+//			throw new SLException("600029");
+//		}
+//		// 2.4、若口令中含有中文
+//		if (!org.springframework.util.StringUtils.isEmpty(charString)) {
+//			if (!isChineseCharString(charString)) {
+//				throw new SLException("600030");
+//			}
+//		}
+//		return false;
+//	}
+
+//	/**
+//	 * 判断字符串是否全为中文
+//	 * 
+//	 * @author taoxm
+//	 * @createTime 2016年9月1日 上午9:01:52
+//	 * @param charString
+//	 * @return
+//	 */
+//	private boolean isChineseCharString(String charString) {
+//		boolean temp = false;
+//		String reg = "[\\u4e00-\\u9fa5]+";// 表示+表示一个或多个中文
+//		if (charString.matches(reg)) {
+//			temp = true;
+//		}
+//		return temp;
+//	}
+
+//	/**
+//	 * 判断字符串是否为数字字符串 true:字符串为数字字符串;false:字符串中含有非数字字符
+//	 * 
+//	 * @author taoxm
+//	 * @createTime 2016年9月1日 上午9:16:32
+//	 * @param numberString
+//	 * @return
+//	 */
+//	private boolean isAllNumberString(String numberString) {
+//		boolean flag = true;
+//		for (int i = 0; i < numberString.length(); i++) {
+//			if (!Character.isDigit(numberString.charAt(i))) {
+//				flag = false;
+//				break;
+//			}
+//		}
+//		return flag;
+//	}
+
+//	/**
+//	 * 字符串中是否有重复的字符 true:含有重复的字符;false:不含重复的字符
+//	 * 
+//	 * @author taoxm
+//	 * @createTime 2016年8月31日 下午7:41:56
+//	 * @param str
+//	 * @return
+//	 */
+//	private boolean hasRepeatChar(String str) {
+//		boolean flag = false;
+//		for (int i = 0; i < str.length(); i++) {
+//			if (str.indexOf(str.charAt(i)) < i) {
+//				flag = true;
+//				break;
+//			}
+//		}
+//		return flag;
+//	}
+
+
+	/**
+	 * 查询红包列表
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午1:50:49
+	 * @param pageRequest
+	 * @return
+	 */
+	public PageResponse<Map<String, Object>> findAllPage(PageRequestVo pageRequest) {
+		PageResponse<Map<String, Object>> result = repository.findAllPage(pageRequest);
+		return result;
+	}
+
+	/**
+	 * 查询单个红包详情
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午1:51:37
+	 * @param id
+	 * @return
+	 * @throws Exception
+	 */
+	public Map<String, Object> findRedpackAndAdvertisementInfo(String id) throws Exception {
+		Map<String, Object> result = repository.findRedpackAndAdvertisementInfo(id);
+		if (null == result || result.isEmpty()) {
+			throw new SLException("600003");
+		}
+		String advertisementId = MapUtil.getStringTrim(result, "advertisementId");
+		List<Map<String, Object>> answers = advertisementAnswerService.findByAdvertisementId(advertisementId);
+		result.put("answers", answers);
+		List<Map<String, Object>> files = fileService.findByRelateTableAndRelatePrimary(TableConstant.T_ADVERTISEMENT, advertisementId);
+		result.put("files", files);
+		return result;
+	}
+
+	/**
+	 * 根据传入的日期计算红包总发送次数 其中不包括"已下架"的红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午2:53:41
+	 * @param day
+	 *            日期
+	 * @return
+	 */
+	public Long todayTotalCount(Date day) {
+		Date date = DateUtil.weedDayBelow(day);
+		List<String> status = new ArrayList<String>();
+		status.add(RedpackStatus.未开启.toString());
+		status.add(RedpackStatus.正开启.toString());
+		status.add(RedpackStatus.已开启.toString());
+		return repository.todayRedpackCount(date, status); 
+	}
+
+	/**
+	 * 根据传入的日期计算红包已经发送的次数
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午2:53:41
+	 * @param day
+	 *            日期
+	 * @return
+	 */
+	public Long todaySentCount(Date day) {
+		Date date = DateUtil.weedDayBelow(day);
+		List<String> status = new ArrayList<String>();
+		status.add(RedpackStatus.正开启.toString());
+		status.add(RedpackStatus.已开启.toString());
+		return repository.todayRedpackCount(date, status); 
+	}
+
+	/**
+	 * 距离系统时间最近的当天还没有开启的红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午5:01:52
+	 * @param systemTime
+	 *            系统时间 格式：2016-8-16 17:28:17
+	 * @return
+	 */
+	public RedPack findCloselyHaveNotOpen(Date systemTime) {
+		Date date = DateUtil.weedDayBelow(systemTime);
+		return repository.findCloselyHaveNotOpen(date, systemTime, RedpackStatus.未开启.toString());
+	}
+
+	/**
+	 * 距离当天时间最近的还没有开启的红包，例如系统时间11点。9点场次的红包由于某种原因是“未开启”状态，则查询出的是9点场次的红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午5:01:52
+	 * @param systemTime
+	 *            系统时间 格式：2016-8-16 17:28:17
+	 * @return
+	 */
+	public RedPack findCloselyDayHaveNotOpen(Date systemTime) {
+		Date date = DateUtil.weedDayBelow(systemTime);
+		return repository.findCloselyDayHaveNotOpen(date, RedpackStatus.未开启.toString());
+	}
+
+	/**
+	 * 距离系统时间最近的正在开启的红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午5:01:52
+	 * @param systemTime
+	 *            系统时间 格式：2016-8-16 17:28:17
+	 * @return
+	 */
+	public RedPack findCloselyHaveOpening(Date systemTime) {
+		Date date = DateUtil.weedDayBelow(systemTime);
+		return repository.findCloselyHaveOpening(date, systemTime, RedpackStatus.正开启.toString());
+	}
+
+	/**
+	 * 距离当天时间最近“正开启”的红包，例如系统时间11点。9点场次的红包由于某种原因是“正开启”状态没有变成“已开启”， 则查询出的是9点场次的红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月16日 下午5:01:52
+	 * @param systemTime
+	 *            系统时间 格式：2016-8-16 17:28:17
+	 * @return
+	 */
+	public RedPack findCloselyDayHaveOpening(Date systemTime) {
+		Date date = DateUtil.weedDayBelow(systemTime);
+		return repository.findCloselyDayHaveOpening(date, RedpackStatus.正开启.toString());
+	}
+
+	/**
+	 * 导出红包
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月17日 下午1:52:00
+	 * @param redPackExportExcelVo
+	 * @param monthsBetween
+	 * @return
+	 */
+	public List<Map<String, Object>> exportExcel(RedPackExportExcelVo redPackExportExcelVo, int monthsBetween) {
+		String endTimePoint = redPackExportExcelVo.getEndTimePoint();
+		String startTimePoint = redPackExportExcelVo.getStartTimePoint();
+		Date endTimePointD = null;
+		Date startTimePointD = null;
+		// 1、判断并设置开始和结束时间
+		if (StringUtils.isBlank(endTimePoint) && StringUtils.isBlank(startTimePoint)) {
+			endTimePointD = DateUtil.getToday();
+			startTimePointD = DateUtil.addMonths(endTimePointD, -monthsBetween);
+		} else if ((!StringUtils.isBlank(endTimePoint)) && StringUtils.isBlank(startTimePoint)) {
+			endTimePointD = DateUtil.parseToDate(endTimePoint, "yyyy-MM-dd");
+			startTimePointD = DateUtil.addMonths(endTimePointD, -monthsBetween);
+		} else if ((!StringUtils.isBlank(startTimePoint)) && StringUtils.isBlank(endTimePoint)) {
+			startTimePointD = DateUtil.parseToDate(startTimePoint, "yyyy-MM-dd");
+			endTimePointD = DateUtil.addMonths(startTimePointD, monthsBetween);
+		} else {
+			endTimePointD = DateUtil.parseToDate(endTimePoint, "yyyy-MM-dd");
+			startTimePointD = DateUtil.parseToDate(startTimePoint, "yyyy-MM-dd");
+		}
+		// 2、判断时间跨度是否大于3个月
+		if (DateUtil.addMonths(startTimePointD, monthsBetween).compareTo(endTimePointD) < 0) {
+			throw new SLException("600008");
+		}
+		redPackExportExcelVo.setEndTimePoint(new SimpleDateFormat("yyyy-MM-dd").format(endTimePointD));
+		redPackExportExcelVo.setStartTimePoint(new SimpleDateFormat("yyyy-MM-dd").format(startTimePointD));
+		return repository.exportExcel(redPackExportExcelVo);
+	}
+
+	/**
+	 * 根据id查询红包
+	 *
+	 * @author SangLy
+	 * @createTime 2016年4月26日 下午2:42:56
+	 * @param id
+	 *            红包id
+	 * @return
+	 */
+	public RedPack findById(String id) {
+		return findOne(id);
+	}
+
+	/**
+	 * app-红包里列表
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月19日 上午9:41:14
+	 * @param pageRequest
+	 * @return
+	 */
+	public PageResponse<Map<String, Object>> appRedpackListSort(PageRequestVo pageRequest) throws SLException {
+		// 排序条件
+		String type = (String) pageRequest.getParam("type"); // 值为：初始化、全部、淘金、捡漏
+		String amountOrder = (String) pageRequest.getParam("amountOrder"); // 对应页面金额的升降（值为，ASC,DESC）
+
+		// 校验参数并设定参数值
+		validationAndsetParamOfRedpacklist(pageRequest);
+
+		// 一、全部
+		/**
+		 * 1.如果所有的参数为空则，按照全部，排序规则为： a.正在开启，未开启时间正排序，b.未开启，时间正序，c.已开启，时间倒序
+		 */
+		if (StringUtils.isBlank(type) && StringUtils.isBlank(amountOrder)) {
+			return repository.appRedpackAllDefaultSort(pageRequest);
+		}
+		/**
+		 * 2.全部，并且金额排序不为空，按照金额排序，如果金额相同，按照开启时间正序
+		 */
+		if (StringUtils.isBlank(type) && StringUtils.isNotBlank(amountOrder)) {
+			if (AmountOrder.ASC.toString().equals(amountOrder)) {
+				return repository.appRedpackAllByAmountOrderAsc(pageRequest);
+			} else if (AmountOrder.DESC.toString().equals(amountOrder)) {
+				return repository.appRedpackAllByAmountOrderDsc(pageRequest);
+			}
+		}
+		// 二、任务
+		/**
+		 * 默认，正在开启放前，未开启放后，按照开启时间正序
+		 */
+		if ("任务".equals(type) && StringUtils.isBlank(amountOrder)) {
+			return repository.appRedpackRenWuByDefaultSort(pageRequest);
+		}
+		if ("任务".equals(type) && StringUtils.isNotBlank(amountOrder)) {
+			if (AmountOrder.ASC.toString().equals(amountOrder)) {
+				return repository.appRedpackRenWuByAmountOrderAsc(pageRequest);
+			} else if (AmountOrder.DESC.toString().equals(amountOrder)) {
+				return repository.appRedpackRenWuByAmountOrderDsc(pageRequest);
+			}
+		}
+		// 三、土豪
+		/**
+		 * 默认：开启时间倒序
+		 */
+		if ("土豪".equals(type) && StringUtils.isBlank(amountOrder)) {
+			return repository.appRedpackRedPackTypeByDefaultSort(pageRequest);
+		}
+		if ("土豪".equals(type) && StringUtils.isNotBlank(amountOrder)) {
+			if (AmountOrder.ASC.toString().equals(amountOrder)) {
+				return repository.appRedpackRedPackTypeByAmountOrderAsc(pageRequest);
+			} else if (AmountOrder.DESC.toString().equals(amountOrder)) {
+				return repository.appRedpackRedPackTypeByAmountOrderDsc(pageRequest);
+			}
+		}
+		// 三、经济
+		/**
+		 * 默认：开启时间倒序
+		 */
+		if ("经济".equals(type) && StringUtils.isBlank(amountOrder)) {
+			return repository.appRedpackRedPackTypeByDefaultSort(pageRequest);
+		}
+		if ("经济".equals(type) && StringUtils.isNotBlank(amountOrder)) {
+			if (AmountOrder.ASC.toString().equals(amountOrder)) {
+				return repository.appRedpackRedPackTypeByAmountOrderAsc(pageRequest);
+			} else if (AmountOrder.DESC.toString().equals(amountOrder)) {
+				return repository.appRedpackRedPackTypeByAmountOrderDsc(pageRequest);
+			}
+		}
+		return null;
+	}
+
+	// 红包列表设置时间参数
+	@SuppressWarnings("deprecation")
+	private void validationAndsetParamOfRedpacklist(PageRequestVo pageRequest) {
+
+		Date systemTime = new Date();
+		Date queryStartTimePoint = DateUtil.weedDayBelow(systemTime);
+		Date queryEndTimePoint = DateUtil.weedDayBelow(systemTime);
+
+		String startTimePoint = MapUtils.getString(pageRequest.getParams(), "startTimePoint");
+		String endTimePoint = MapUtils.getString(pageRequest.getParams(), "endTimePoint");
+		String startAmount = MapUtils.getString(pageRequest.getParams(), "startAmount");
+		String endAmount = MapUtils.getString(pageRequest.getParams(), "endAmount");
+		String amountOrder = MapUtils.getString(pageRequest.getParams(), "amountOrder");
+		String type = MapUtils.getString(pageRequest.getParams(), "type");
+
+		try {
+			if (StringUtils.isNotBlank(startTimePoint)) {
+				queryStartTimePoint.setHours(Integer.parseInt(startTimePoint));
+			}
+			if (StringUtils.isNotBlank(endTimePoint)) {
+				queryEndTimePoint.setHours(Integer.parseInt(endTimePoint));
+			} else {
+				queryEndTimePoint.setHours(23);
+				queryEndTimePoint.setMinutes(59);
+				queryEndTimePoint.setSeconds(59);
+			}
+			if (StringUtils.isNotBlank(amountOrder)) {
+				if (AmountOrder.valueOf(amountOrder) == null) {
+					throw new Exception();
+				}
+			}
+			//相应类型传递的数据对应如下: 全部：空串 任务红包：任务 土豪红包：土豪 经济红包: 经济 
+			if (!"".equals(type) && !"任务".equals(type) && !"土豪".equals(type) && !"经济".equals(type)) {
+				throw new Exception();
+			}
+			if("经济".equals(type)){
+				pageRequest.addParam("redpackType", RedpackType.经济红包.toString());
+			}else if("土豪".equals(type)){
+				pageRequest.addParam("redpackType", RedpackType.土豪红包.toString());
+			}
+
+			// 设置参数
+			Date day = DateUtil.weedDayBelow(systemTime);
+			pageRequest.addParam("day", day);
+			pageRequest.addParam("startTimePoint", queryStartTimePoint);
+			pageRequest.addParam("endTimePoint", queryEndTimePoint);
+			if (StringUtils.isNotBlank(startAmount)) {
+				pageRequest.addParam("startAmount", Double.parseDouble(startAmount));
+			}
+			if (StringUtils.isNotBlank(endAmount)) {
+				pageRequest.addParam("endAmount", Double.parseDouble(endAmount));
+			}
+
+		} catch (Exception e) {
+			throw new SLException("100000", "param wors wrong");
+		}
+	}
+
+	/**
+	 * app-我的红包预约列表
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月19日 下午4:54:07
+	 * @param pageRequest
+	 * @return
+	 */
+	public PageResponse<Map<String, Object>> appGetSubscription(PageRequestVo pageRequest) {
+		return repository.appGetSubscription(pageRequest);
+	}
+
+	/**
+	 * app-获取红包口令 前端根据此值进行不能的操作 0：回答正确 1: 回答错误 2: 红包抢光 3：任务未做完
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月22日 上午10:25:18
+	 * @param id
+	 *            红包id
+	 * @param userId
+	 *            用户id
+	 * @return
+	 */
+	public Map<String, Object> appGetShibboleth(String redpackId, String correctAnswer, String customerId) throws SLException {
+		Map<String, Object> result = new HashMap<String, Object>();
+		RedPack redpack = findOne(redpackId);
+		if (redpack != null) {
+			if (RedpackStatus.正开启.equals(redpack.getStatus()) || RedpackStatus.已开启.equals(redpack.getStatus())) {
+				Date systemTime = new Date();
+				if (redpack.getRedpackType().equals(RedpackType.分享红包)) {
+					// 分享任务
+					Advertisement dailyQuestAdvertisement = advertisementService.dailyQuest();
+					if (dailyQuestAdvertisement != null) {
+						List<Map<String, Object>> hongbaofenxiangList = customerRelationService.findListCustomerIdAndRelateTableAndRelatePrimaryAndTypeAndDay(systemTime, customerId, TableConstant.T_ADVERTISEMENT, dailyQuestAdvertisement.getId(), CustomerRelationType.广告分享);
+						if (hongbaofenxiangList.size() < 0) {
+							result.put("condition", "3");
+							return result;
+						}
+					}
+				} else if (redpack.getRedpackType().equals(RedpackType.邀请红包)) {
+					List<Map<String, Object>> hongbaoyaoqingList = customerRelationService.findListCustomerIdAndRelateTableAndTypeAndDay(systemTime, customerId, CustomerRelationType.好友邀请);
+					List<Map<String, Object>> userRegisterLog = customerRelationService.findListRelatePrimaryAndRelateTableAndTypeAndDay(systemTime, customerId, CustomerRelationType.好友邀请);
+					if (hongbaoyaoqingList.size() < 0 && userRegisterLog.size() < 0) {
+						result.put("condition", "3");
+						return result;
+					}
+				}
+				// 判断红包是否抢光
+				if (RedpackStatus.已抢完.equals(redpack.getStatus())) {
+					result.put("condition", "2");
+					return result;
+				}
+				// 根据红包id获取答案
+				Advertisement advertisement = advertisementService.findOne(redpack.getAdvertisementId());
+				if (advertisement != null) {
+					AdvertisementAnswer advertisementAnswer = advertisementAnswerService.findOne(advertisement.getCorrectAnswer());
+					if (advertisementAnswer != null) {
+						if (correctAnswer.equals(advertisementAnswer.getId())) {
+							try {
+								//抢红包
+								Distribute distribute = distributeService.robRedPack(redpackId, customerId);
+								if (distribute != null) {
+									result.put("condition", "0");
+									result.put("amount", distribute.getAmount());
+									return result;
+								} else {
+									result.put("condition", "2");
+									return result;
+								}
+							} catch (Exception e) {
+								result.put("condition", "2");
+								return result;
+							}
+						}
+					}
+					result.put("condition", "1");
+					return result;
+				}
+			} else {
+				throw new SLException("600012", "no redpack find by id");
+			}
+		} else {
+			throw new SLException("600012", "no redpack find by id");
+		}
+		return result;
+	}
+	
+	/**
+	 * 根据红包id获取答案列表
+	 * @author SangLy
+	 * @createTime 2016年11月2日 下午2:00:01
+	 * @param redpackId
+	 * @return
+	 */
+	public List<AdvertisementAnswer> findAnswerListByRedpackId(String redpackId){
+		return repository.findAnswerListByRedpackId(redpackId);
+	}
+
+	/**
+	 * 红包订阅
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月31日 上午11:20:45
+	 * @param redpackId
+	 * @param userId
+	 */
+	public void appointment(String redpackId, String userId) {
+		// 先判断此红包是否已经订阅
+		List<Map<String, Object>> hongbaodingyueList = customerRelationService.findListCustomerIdAndRelateTableAndRelatePrimaryAndTypeAndDay(new Date(), userId, TableConstant.T_REDPACK, redpackId, CustomerRelationType.红包订阅);
+		if (hongbaodingyueList.size() > 0) {
+			throw new SLException("600011", "this Redpack have subscribed");
+		}
+		// 判断红包是否存在
+		RedPack redpack = findById(redpackId);
+		if (redpack == null) {
+			throw new SLException("600012", "not found redpack by id");
+		}
+		Date systemTime = new Date();
+		if (systemTime.getTime() > redpack.getTimePoint().getTime()) {
+			throw new SLException("600017", "红包已经开启");
+		}
+		Date dayHour20 = DateUtil.weedDayBelow(new Date());
+		Date dayHour21 = DateUtil.weedDayBelow(new Date());
+		dayHour20.setHours(20);
+		dayHour21.setHours(21);
+		// 20点钟分享任务 --关联表为广告表,关联表主键是此红包的广告
+		if (redpack.getTimePoint().getTime() == dayHour20.getTime()) {
+			List<Map<String, Object>> hongbaofenxiangList = customerRelationService.findListCustomerIdAndRelateTableAndRelatePrimaryAndTypeAndDay(systemTime, userId, TableConstant.T_ADVERTISEMENT, redpack.getAdvertisementId(), CustomerRelationType.广告分享);
+			if (hongbaofenxiangList.size() < 0) {
+				throw new SLException("600021", "20点红包需要解锁");
+			}
+		}
+		// 21点钟邀请任务-- 关联表为前端客户表
+		if (redpack.getTimePoint().getTime() == dayHour21.getTime()) {
+			List<Map<String, Object>> hongbaoyaoqingList = customerRelationService.findListCustomerIdAndRelateTableAndTypeAndDay(systemTime, userId, CustomerRelationType.好友邀请);
+			List<Map<String, Object>> userRegisterLog = customerRelationService.findListRelatePrimaryAndRelateTableAndTypeAndDay(systemTime, userId, CustomerRelationType.好友邀请);
+			if (hongbaoyaoqingList.size() < 0 && userRegisterLog.size() < 0) {
+				throw new SLException("600022", "21点红包需要解锁");
+			}
+		}
+		if (DateUtil.addMinutes(new Date(), RedPackConstant.BEFORE_START_REDPACK_TIME_MINITS_NOT_DINGYUE.intValue()).getTime() >= redpack.getTimePoint().getTime()) {
+			throw new SLException("600018", RedPackConstant.BEFORE_START_REDPACK_TIME_MINITS_NOT_DINGYUE + "分钟之内无法订阅");
+		} else {
+			customerRelationService.saveCustomerRelation(userId, TableConstant.T_REDPACK, redpackId, CustomerRelationType.红包订阅);
+		}
+	}
+
+	/**
+	 * 修改红包广告信息
+	 * @param id
+	 * @param advertisementId
+	 * @return
+	 */
+	@Transactional
+	public RedPack updateRedPackAdvertisementInfoById(String id,String advertisementId){
+		RedPack redPack = findById(id);
+		if(null == redPack){
+			throw new SLException("600003");
+		}
+		if(redPack.getUserType() != UserType.员工){
+			throw new SLException("600049");
+		}
+		Advertisement advertisement = advertisementService.findById(advertisementId);
+		if(null == advertisement){
+			throw new SLException("500009");
+		}
+		redPack.setAdvertisementId(advertisementId);
+		return save(redPack);
+	}
+	
+	/**
+	 * 红包审核
+	 * @param id
+	 * @param auditStatus
+	 * @param memo
+	 * @return
+	 */
+	@Transactional
+	public RedPack auditRedPackById(String id, String auditStatus, String memo) {
+		RedPack redPack = findById(id);
+		if(null == redPack){
+			throw new SLException("600003");
+		}
+		//红包的状态必须为待审核
+		if(redPack.getStatus() != RedpackStatus.待审核){
+			throw new SLException("600032");
+		}
+		//如果是审核驳回，必须填写理由
+		if(RedpackStatus.valueOf(auditStatus) != RedpackStatus.审核通过 && StringUtils.isBlank(memo)){
+			throw new SLException("600033");
+		}
+		redPack.setStatus(RedpackStatus.valueOf(auditStatus));
+		redPack.setMemo(memo);
+		return save(redPack);
+	}
+	
+	/**
+	 * 根据红包id和用户id判断红包是否订阅
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月2日 下午6:16:41
+	 * @param redpackId
+	 * @param userId
+	 * @return
+	 */
+	public Boolean hasAppointment(String redpackId, String userId) {
+		List<Map<String, Object>> hongbaodingyueList = customerRelationService.findListCustomerIdAndRelateTableAndRelatePrimaryAndTypeAndDay(new Date(), userId, TableConstant.T_REDPACK, redpackId, CustomerRelationType.红包订阅);
+		if (hongbaodingyueList.size() > 0) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+	
+	/**
+	 * app-移除红包订单
+	 * 
+	 * RedpackStatus.已失效 RedpackRecordStatus.删除
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月3日 下午8:13:26
+	 * @param redpackId
+	 * @param redpackId
+	 */
+	@Transactional
+	public void removeRedPackById(String redpackId, String customerId) {
+		RedPack redpack = repository.findOne(redpackId);
+		if (redpack == null) {
+			throw new SLException("600003", "redpack not found");
+		} else {
+			if (customerId.equals(redpack.getCreatedUser())) {
+				redpack.setStatus(RedpackStatus.已失效);
+				redpack.setRecordStatus(RedpackRecordStatus.删除);
+				repository.save(redpack);
+			} else {
+				throw new SLException("600003", "redpack not found");
+			}
+		}
+	}
+	
+	/**
+	 * app-取消红包订单
+	 * 
+	 * RedpackStatus.已失效)
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月3日 下午8:13:26
+	 * @param redpackId
+	 * @param redpackId
+	 */
+	@Transactional
+	public void cancelOrderRedPackById(String redpackId, String customerId) {
+		RedPack redpack = repository.findOne(redpackId);
+		if (redpack == null) {
+			throw new SLException("600003", "redpack not found");
+		} else {
+			if (redpackId.equals(redpack.getCreatedUser())) {
+				redpack.setStatus(RedpackStatus.已失效);
+				repository.save(redpack);
+			} else {
+				throw new SLException("600003", "redpack not found");
+			}
+		}
+	}
+	
+	/**
+	 * app-首页突出红包展示
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月4日 上午10:28:39
+	 * @param redpackType
+	 * @return
+	 */
+	public RedPack findNextRedpack(RedpackType redpackType){
+		Date day = DateUtil.weedDayBelow(new Date());
+		return repository.findNextRedpack(day,RedpackStatus.未开启.toString(),redpackType.toString());
+	}
+	
+	
+	/**
+	 * app-首页突出红包展示(全部)
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月4日 上午10:28:39
+	 * @param redpackType
+	 * @return
+	 */
+	public RedPack findNextRedpackForAll(){
+		Date day = DateUtil.weedDayBelow(new Date());
+		return repository.findNextRedpackForAll(day,RedpackStatus.未开启.toString());
+	}
+	
+	/**
+	 * app-中奖名单
+	 * @author SangLy
+	 * @createTime 2016年11月4日 下午4:18:53
+	 * @param pageRequest
+	 * @return
+	 */
+	public PageResponse<Map<String, Object>> winnersRedpackList(PageRequestVo pageRequest){
+		return repository.winnersRedpackList(pageRequest);
+	}
+	
+	/**
+	 * app-红包订单列表
+	 *
+	<pre>
+	  	待付款-待付款
+		已失效-已失效
+		待审核-待审核
+		已通过-审核通过、未开启、正开启、已开启、已抢完、已过期
+		被驳回-审核驳回
+	</pre>
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月3日 下午8:13:26
+	 * @param advertisementId
+	 * @param customerId
+	 */
+	public PageResponse<Map<String, Object>> orderListByCustomerId(PageRequestVo pageRequest,String customerId){
+		String redpackOrderType = MapUtils.getString(pageRequest.getParams(), "redpackOrderType");
+		if("被驳回".equals(redpackOrderType)){
+			redpackOrderType = RedpackStatus.审核驳回.toString();
+		}
+		PageResponse<Map<String, Object>> result = null;
+		if(RedpackStatus.待付款.toString().equals(redpackOrderType) || RedpackStatus.已失效.toString().equals(redpackOrderType) || RedpackStatus.待审核.toString().equals(redpackOrderType) || RedpackStatus.审核驳回.toString().equals(redpackOrderType)){
+			List<String> status = new ArrayList<String>();
+			status.add(RedpackStatus.valueOf(redpackOrderType).toString());
+			pageRequest.addParam("status", status);
+			pageRequest.addParam("customerId", customerId);
+			result = repository.orderListByCustomerId(pageRequest);
+		}else if ("已通过".equals(redpackOrderType)){
+			List<String> status = new ArrayList<String>();
+			status.add(RedpackStatus.审核通过.toString());
+			status.add(RedpackStatus.未开启.toString());
+			status.add(RedpackStatus.正开启.toString());
+			status.add(RedpackStatus.已抢完.toString());
+			status.add(RedpackStatus.已过期.toString());
+			pageRequest.addParam("status", status);
+			pageRequest.addParam("customerId", customerId);
+			result = repository.orderListByCustomerId(pageRequest);
+		}else{
+			//未知状态
+			throw new SLException("600047","not found status");
+		}
+		if(result != null){
+			List<Map<String,Object>> list = result.getData();
+			for(Map<String,Object> map: list){
+				map.put("systemTime", new Date());
+				map.put("redpackOrderType",redpackOrderType);
+			}
+		}
+		return result;
+	}
+	
+	/**
+	 * 当天红包预分配表添加记录
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月11日 下午5:24:03
+	 */
+	@Transactional
+	public void redPackDistributeJob() {
+		List<RedPack> list = findByTimePointAndRecordStatusAndStatusAndRedpackTypeNotInOrderByCreatedDateAsc();
+		Date today = DateUtil.weedDayBelow(new Date());
+		int temp = 0;
+		for (int i = 0; i < list.size(); i++) {
+			RedPack redPack = list.get(i);
+			if (temp < RedPackConstant.REDPACK_TIME_POINT.length) {
+				saveDistributeAndupdateRedpack(redPack, today, temp);
+				temp++;
+			} else {
+				// 重新计数
+				temp = 0;
+				saveDistributeAndupdateRedpack(redPack, today, temp);
+				temp++;
+			}
+		}
+	}
+	
+	/**
+	 * 查询当天需要生成红分配记录表的红包
+	 */
+	public List<RedPack> findByTimePointAndRecordStatusAndStatusAndRedpackTypeNotInOrderByCreatedDateAsc() {
+		List<RedpackType> redpackType = new ArrayList<RedpackType>();
+		redpackType.add(RedpackType.邀请红包);
+		redpackType.add(RedpackType.分享红包);
+		Date today = DateUtil.weedDayBelow(new Date());
+		return repository.findByTimePointAndRecordStatusAndStatusAndRedpackTypeNotInOrderByCreatedDateAsc(today, RedpackRecordStatus.正常, RedpackStatus.审核通过, redpackType);
+	}
+	
+	/**
+	 * 根据红包id生成预分配记录，和更新红包
+	 * @author SangLy
+	 * @createTime 2016年11月11日 下午5:53:02
+	 * @param redPack
+	 */
+	@Transactional
+	private void saveDistributeAndupdateRedpack(RedPack redPack,Date today,int temp){
+		// 生成红包分配表
+		Integer bigCount = redPack.getBigCount();
+		Integer smallCount = redPack.getSmallCount();
+		Integer totalCount = bigCount + smallCount;
+
+		for (int j = 0; j < totalCount; j++) {
+			if (j < bigCount) {
+				//设置大奖
+				Distribute distribute = new Distribute();
+				distribute.setRedpackId(redPack.getId());
+				distribute.setAmount(redPack.getBigAmount());
+				distribute.setOrdered(j);
+				distribute.setCreatedUser(UserType.robot.toString());
+				distributeService.save(distribute);
+			} else {
+				//设置小奖
+				Distribute distribute = new Distribute();
+				distribute.setRedpackId(redPack.getId());
+				distribute.setAmount(redPack.getSmallAmount());
+				distribute.setOrdered(j);
+				distribute.setCreatedUser(UserType.robot.toString());
+				distributeService.save(distribute);
+			}
+		}
+		redPack.setTimePoint(RedPackUtils.getTimePoint(today, RedPackConstant.REDPACK_TIME_POINT[temp])); // 修改红包开启时间
+		RedpackType redpackType = redPack.getRedpackType();
+		redPack.setOrdered(RedPackUtils.setRedPackOrderedValueOfNotOpen(redpackType));
+		redPack.setStatus(RedpackStatus.未开启);
+		repository.save(redPack);
+	}
+	
+}

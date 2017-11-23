@@ -1,0 +1,108 @@
+/** 
+ * @(#)AdvertisementServiceTest.java 1.0.0 2016年8月18日 下午5:29:50  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */ 
+
+package com.slfinance.redpack.core.services;
+
+
+import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Assert;
+import org.junit.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.slfinance.redpack.core.ServiceCoreApplicationTests;
+import com.slfinance.redpack.core.constants.enums.AdvertisementType;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.vo.AdvertisementVo;
+
+/**   
+ * 
+ *  
+ * @author  taoxms
+ * @version $Revision:1.0.0, $Date: 2016年8月18日 下午5:29:50 $ 
+ */
+public class AdvertisementServiceTest extends ServiceCoreApplicationTests{
+	
+	@Autowired
+	private AdvertisementService advertisementService;
+	
+	/**
+	 * 测试根据id查询广告详情
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:39:40
+	 */
+	@Test
+	public void testFindOneDetail(){
+		String id = "409082b0581eac2601581eac3b060000";
+		Assert.assertTrue(advertisementService.findOneDetail(id) != null);
+	}
+	
+	/**
+	 * 根据广告code查询广告信息
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:41:33
+	 */
+	@Test
+	public void testFindAdvertisementByCode(){
+		String advertisementCode = "dsb_aid_0000000007";
+		Assert.assertTrue(advertisementService.findByAdvertisementCode(advertisementCode)!=null);
+	}
+	
+	/**
+	 * 如果id为空,表示新建广告
+	 * 否则就要提供一个已有的广告id作为修改的条件
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:17:45
+	 * @throws ParseException
+	 */
+	@Test
+	public void testSaveAdvertisement() throws ParseException{
+		AdvertisementVo advertisementVo = new AdvertisementVo();
+		String id = null;//新建广告
+		//String id = "cc03583e-2219-45fd-bac8-aeae3ff626d3";//修改红包
+		advertisementVo.setId(id);
+		advertisementVo.setAdvertiserName("善林科技222");
+		advertisementVo.setLogo("shanlinLogo");
+		advertisementVo.setTitle("title1");
+		advertisementVo.setType(AdvertisementType.红包.name());
+		advertisementVo.setContent("测试service");
+		advertisementVo.setStartDate("2016-11-11");
+		advertisementVo.setEndDate("2016-12-31");
+		List<Map<String, Object>> files = new ArrayList<Map<String,Object>>();
+		Map<String, Object> file = new HashMap<String, Object>();
+		file.put("id", "11111111");
+		files.add(file);
+		advertisementVo.setFiles(files);
+		advertisementVo.setHyperlink("localhost:8084/abc/123");
+		List<Map<String, Object>> answers = new ArrayList<Map<String,Object>>();
+		Map<String, Object> a1 = new HashMap<String, Object>();
+		a1.put("id", null);
+		a1.put("answerContent", "答案一，正确答案");
+		answers.add(a1);
+		Map<String, Object> a2 = new HashMap<String, Object>();
+		a2.put("id", null);
+		a2.put("answerContent", "答案二，错误答案");
+		answers.add(a2);
+		advertisementVo.setAnswers(answers);
+		advertisementVo.setCorrectAnswer("0");
+		Assert.assertTrue(advertisementService.saveAdvertisement(advertisementVo)!=null);
+	}
+	
+	/**
+	 * 测试查询广告列表
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:44:19
+	 */
+	@Test
+	public void testFindAllPage(){
+		PageRequestVo pageRequestVo = new PageRequestVo();
+		Assert.assertTrue(advertisementService.findAllPage(pageRequestVo) != null);
+	}
+}

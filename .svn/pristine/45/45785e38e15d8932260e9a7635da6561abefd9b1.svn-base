@@ -1,0 +1,293 @@
+/** 
+ * @(#)AdvertisementService.java 1.0.0 2016年7月25日 下午3:27:09  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.core.constants.TableConstant;
+import com.slfinance.redpack.core.constants.enums.AdType;
+import com.slfinance.redpack.core.constants.enums.AdvertisementStatus;
+import com.slfinance.redpack.core.constants.enums.CustomerRelationType;
+import com.slfinance.redpack.core.constants.enums.LogType;
+import com.slfinance.redpack.core.constants.enums.RedpackStatus;
+import com.slfinance.redpack.core.constants.enums.UserType;
+import com.slfinance.redpack.core.entities.Advertisement;
+import com.slfinance.redpack.core.entities.CustomerRelation;
+import com.slfinance.redpack.core.entities.OperateLog;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.repositories.AdvertisementRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+import com.slfinance.redpack.core.vo.AdvertisementVo;
+
+/**
+ * 广告
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 下午3:27:09 $
+ */
+@Service
+public class AdvertisementService extends BaseService<Advertisement, AdvertisementRepository> {
+
+	@Autowired
+	private CodeGeneratorService codeGeneratorService;
+
+	@Autowired
+	private AdvertisementPhotoService advertisementPhotoService;
+
+	@Autowired
+	private CustomerRelationService customerRelationService;
+
+	@Autowired
+	private RedisTemplate<String, String> redisTemplate;
+
+	@Autowired
+	OperateLogService operateLogService;
+
+	/**
+	 * 根据广告code查询广告
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:42:00
+	 * @param advertisementCode
+	 * @return
+	 */
+	public Map<String, Object> findByAdvertisementCodeAndStatus(String advertisementCode) {
+		List<String> status = new ArrayList<String>();
+		// 只能查询为下架的红包
+		status.add(AdvertisementStatus.未下架.name());
+		// 只能查出红包广告
+		List<String> types = new ArrayList<String>();
+		types.add(AdType.红包广告.name());
+		Map<String, Object> result = repository.findByAdvertisementCodeAndStatusAndTypes(advertisementCode, status, types);
+		if (result == null || result.isEmpty()) {
+			throw new SLException("500009");
+		}
+		List<Map<String, Object>> advertisementPhotos = advertisementPhotoService.findPathsByAdvertisementId((String) result.get("id"));
+		result.put("advertisementPhoto", advertisementPhotos);
+		return result;
+	}
+
+	/**
+	 * @author taoxm
+	 * @createTime 2016年8月24日 下午4:58:28
+	 * @param advertisementCode
+	 * @return
+	 */
+	public Advertisement findAdvertisementByAdvertisementCode(String advertisementCode) {
+		return repository.findByAdvertisementCode(advertisementCode);
+	}
+
+	/**
+	 * 保存广告(新增和修改)
+	 * 
+	 * @author work
+	 * @createTime 2016年8月19日 上午9:42:46
+	 * @param advertisementVo
+	 * @return
+	 * @throws ParseException
+	 */
+	@Transactional
+	public Advertisement saveAdvertisement(AdvertisementVo advertisementVo) throws ParseException {
+		String id = advertisementVo.getId();
+		Advertisement advertisement = null;
+		if (StringUtils.isBlank(id)) {// 新增
+			advertisement = new Advertisement();
+			String advertisementCode = codeGeneratorService.getAdvertisementCode();
+			advertisement.setAdvertisementCode(advertisementCode);
+		} else {// 修改
+			advertisement = findOne(id);
+		}
+		// 判断广告类型，如果广告类型为首页广告或分享广告时StartDate和EndDate 必选
+		if (AdType.valueOf(advertisementVo.getType()) == AdType.首页广告 || AdType.valueOf(advertisementVo.getType()) == AdType.任务广告) {
+			if (StringUtils.isBlank(advertisementVo.getStartDate()) || StringUtils.isBlank(advertisementVo.getEndDate())) {
+				throw new SLException("600015");
+			}
+			advertisement.setStartDate(DateUtil.parseDate(advertisementVo.getStartDate(), "yyyy-MM-dd"));
+			advertisement.setEndDate(DateUtil.parseDate(advertisementVo.getEndDate(), "yyyy-MM-dd"));
+		} else {
+			if (StringUtils.isNotBlank(advertisementVo.getStartDate())) {
+				advertisement.setStartDate(DateUtil.parseDate(advertisementVo.getStartDate(), "yyyy-MM-dd"));
+			}
+			if (StringUtils.isNotBlank(advertisementVo.getEndDate())) {
+				advertisement.setEndDate(DateUtil.parseDate(advertisementVo.getEndDate(), "yyyy-MM-dd"));
+			}
+		}
+		// 判断开始时间是否小于结束时间
+		if (advertisement.getStartDate().compareTo(advertisement.getEndDate()) > 0) {
+			throw new SLException("600020");
+		}
+
+		advertisement.setAdvertiserId(advertisementVo.getAdvertiserId());
+		advertisement.setType(AdType.valueOf(advertisementVo.getType()));
+		advertisement.setContent(advertisementVo.getContent());
+		advertisement.setHyperlink(advertisementVo.getHyperlink());
+		List<Map<String, String>> advertisementPhotos = advertisementVo.getAdvertisementPhoto();
+		// 判断广告图片是否大于三张
+		if (advertisementPhotos != null && advertisementPhotos.size() > 3) {
+			throw new SLException("500012");
+		}
+		advertisement = save(advertisement);
+		advertisementPhotoService.saveAdvertisementPhoto(advertisementPhotos, advertisement.getId());
+		return advertisement;
+	}
+
+	/**
+	 * 查询广告列表
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:43:13
+	 * @param pageRequest
+	 * @return
+	 */
+	public PageResponse<Advertisement> findAllPage(PageRequestVo pageRequest) {
+		PageResponse<Advertisement> advertisements = repository.findAllPage(pageRequest);
+		return advertisements;
+	}
+
+	/**
+	 * 根据id查询广告详情
+	 * 
+	 * @author work
+	 * @createTime 2016年8月19日 上午9:40:11
+	 * @param id
+	 * @return
+	 */
+	public Map<String, Object> findOneDetail(String id) {
+		Map<String, Object> result = repository.findOneDetail(id);
+		if (result == null || result.isEmpty()) {
+			throw new SLException("500009");
+		}
+		List<Map<String, Object>> advertisementPhotos = advertisementPhotoService.findPathsByAdvertisementId(id);
+		result.put("advertisementPhoto", advertisementPhotos);
+		return result;
+	}
+
+	@Transactional
+	public void soldOut(String id) {
+		Advertisement advertisement = findOne(id);
+		if (null == advertisement) {
+			throw new SLException("500009");
+		}
+		advertisement.setStatus(AdvertisementStatus.已下架);
+		save(advertisement);
+	}
+
+	/**
+	 * 后台管理登录也统计
+	 * 
+	 * @author taoxm
+	 * @createTime 2016年8月19日 上午9:05:11
+	 * @return
+	 */
+	public Map<String, Object> indexPageSummary() {
+		List<String> redpackStatus = new ArrayList<String>();
+		redpackStatus.add(RedpackStatus.已开启.name());
+		return repository.indexPageSummary(redpackStatus);
+	}
+
+	/**
+	 * 查询启动页广告
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月17日 下午12:40:51
+	 * @return
+	 */
+	public List<Map<String, Object>> appFindStartPageAdvertisementPhotoList() {
+		List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+		Date day = DateUtil.weedDayBelow(new Date());
+		Advertisement advertisement = repository.findFirstByTypeAndStartDateLessThanEqualAndEndDateGreaterThanEqualAndStatusOrderByStartDateDesc(AdType.首页广告, day, day, AdvertisementStatus.未下架);
+		if (advertisement != null) {
+			result = advertisementPhotoService.findPathsByAdvertisementId(advertisement.getId());
+		}
+		return result;
+	}
+
+	/**
+	 * 根据id查询广告
+	 *
+	 * @author SangLy
+	 * @createTime 2016年4月26日 下午2:42:56
+	 * @param id
+	 *            广告id
+	 * @return
+	 */
+	public Advertisement findById(String id) {
+		return findOne(id);
+	}
+
+	/**
+	 * 任务广告
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月18日 上午10:06:51
+	 * @return
+	 */
+	public Advertisement dailyQuest() {
+		Date day = DateUtil.weedDayBelow(new Date());
+		return repository.findFirstByTypeAndStartDateLessThanEqualAndEndDateGreaterThanEqualAndStatusOrderByStartDateDesc(AdType.任务广告, day, day, AdvertisementStatus.未下架);
+	}
+
+	/**
+	 * app-广告分享
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月18日 下午6:52:39
+	 * @param id
+	 */
+	@Transactional
+	public void appShare(String id, String customerId) {
+		if (StringUtils.isNotBlank(customerId)) {
+			// 记录分享
+			CustomerRelation customerRelation = new CustomerRelation();
+			customerRelation.setCustomerId(customerId);
+			customerRelation.setRelateTable(TableConstant.T_ADVERTISEMENT);
+			customerRelation.setType(CustomerRelationType.广告分享);
+			customerRelation.setRelatePrimary(id);
+			customerRelationService.save(customerRelation);
+		}
+		operateLogService.saveAsync(new OperateLog(UserType.客户, LogType.广告分享, id, customerId, new Date(), null));
+	}
+
+	/**
+	 * app-点击广告
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年8月18日 下午6:52:39
+	 * @param id
+	 */
+	@Transactional
+	public void appClick(String id, String customerId) {
+		operateLogService.saveAsync(new OperateLog(UserType.客户, LogType.广告点击, id, customerId, new Date(), null));
+	}
+
+	/**
+	 * 查询广告主下面的广告
+	 * 
+	 * @author work
+	 * @createTime 2016年8月29日 下午3:19:11
+	 * @param id
+	 * @param name
+	 * @return
+	 */
+	public List<Advertisement> findByAdvertiserIdAndStatus(String advertiserId, AdvertisementStatus status) {
+		return repository.findByAdvertiserIdAndStatus(advertiserId, status);
+	}
+
+}

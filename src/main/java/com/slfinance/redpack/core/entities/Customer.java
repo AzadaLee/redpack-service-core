@@ -1,0 +1,73 @@
+/**
+ * @(#)Customer.java 1.0.0 2016年7月25日 上午10:55:12
+ * <p/>
+ * Copyright © 2016 善林金融.  All rights reserved.
+ */
+
+package com.slfinance.redpack.core.entities;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.slfinance.redpack.core.constants.enums.CustomerStatus;
+import com.slfinance.redpack.core.entities.base.BaseEntity;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.Table;
+
+/**
+ * 前端客户表（手机注册的抢红包用户）
+ *
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月25日 上午10:55:12 $
+ */
+@Entity
+@Table(name = "RP_T_CUSTOMER")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+public class Customer extends BaseEntity {
+
+    private static final long serialVersionUID = -5000000000000000004L;
+
+    /**
+     * 用户编号
+     */
+    private String customerCode;
+
+    /**
+     * 手机号
+     */
+    private String mobile;
+
+    /**
+     * 昵称
+     */
+    private String nickName;
+
+    /**
+     * 邮箱
+     */
+    private String email;
+
+    /**
+     * 密码
+     */
+    @JsonIgnore
+    private String password;
+
+    /**
+     * 邀请码
+     */
+    private String invitationCode;
+
+    /**
+     * 用户状态
+     */
+    @Enumerated(EnumType.STRING)
+    private CustomerStatus status = CustomerStatus.正常;
+
+}

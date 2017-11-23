@@ -1,0 +1,9 @@
+package com.slfinance.redpack.core.constants.enums;
+
+/**
+ * 广告主状态
+ * Created by samson on 2016/8/12.
+ */
+public enum AdvertiserStatus {
+    新建, 删除
+}

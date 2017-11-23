@@ -1,0 +1,8 @@
+package com.slfinance.redpack.core.repositories;
+
+import com.slfinance.redpack.core.entities.AccountFlow;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+
+public interface AccountFlowRepository extends BaseRepository<AccountFlow>{
+
+}

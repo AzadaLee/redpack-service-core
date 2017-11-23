@@ -1,0 +1,223 @@
+/** 
+ * @(#)PaymentController.java 1.0.0 2016年11月12日 下午4:37:52  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.controller;
+
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.commons.beanutils.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.parser.Feature;
+import com.alipay.api.AlipayApiException;
+import com.alipay.api.internal.util.AlipaySignature;
+import com.google.common.collect.Maps;
+import com.slfinance.redpack.common.utils.StringUtil;
+import com.slfinance.redpack.core.constants.AlipayServiceEnvConstants;
+import com.slfinance.redpack.core.constants.enums.OrderStatus;
+import com.slfinance.redpack.core.constants.enums.OrderType;
+import com.slfinance.redpack.core.controller.base.BaseController;
+import com.slfinance.redpack.core.entities.AppAlipayNotify;
+import com.slfinance.redpack.core.entities.AppPayOrderResponse;
+import com.slfinance.redpack.core.entities.Order;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.extend.validate.RuleUtils;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.AccountService;
+import com.slfinance.redpack.core.services.AlipayService;
+import com.slfinance.redpack.core.services.AppAlipayNotifyService;
+import com.slfinance.redpack.core.services.AppPayOrderResponseService;
+import com.slfinance.redpack.core.services.OrderService;
+
+/**
+ * 支付接口
+ * 
+ * @author samson
+ * @version $Revision:1.0.0, $Date: 2016年11月12日 下午4:37:52 $
+ */
+@RestController
+@RequestMapping(value = "/payment", method = RequestMethod.POST)
+public class PaymentController extends BaseController {
+
+	@Autowired
+	private OrderService orderService;
+	@Autowired
+	private AlipayService alipayService;
+	@Autowired
+	private AppAlipayNotifyService appAlipayNotifyService;
+	@Autowired
+	private AccountService accountService;
+	@Autowired
+	private AppPayOrderResponseService appPayOrderResponseService;
+
+	/**
+	 * 获取alipay支付参数
+	 * 
+	 * @author samson
+	 * @createTime 2016年11月12日 下午4:40:06
+	 * @param id
+	 *            订单id
+	 * @return
+	 */
+	@RequestMapping("getAlipayPayStr")
+	public ResponseVo getAlipayPayStr(@RequestBody Map<String, Object> params) {
+		double amount = com.slfinance.redpack.common.utils.MapUtil.getDoubleValue(params, "amount");
+		if (amount <= 0) {
+			throw new SLException("240003");
+		} else if (!RuleUtils.decimals(amount + "", 2)) {
+			throw new SLException("240004");
+		}
+		Map<String, Object> result = Maps.newHashMap();
+		Order order = new Order();
+		order.setSubject("充值");
+		order.setCustomerId(getLoginUserId());
+		order.setOrderAmount(amount);
+		order.setOrderType(OrderType.支付宝充值);
+		order = orderService.save(order);
+		result.put("orderStr", alipayService.getAppPayOrderString(order));
+		result.put("orderId", order.getId());
+		logger.info("alipay app pay info params : {}", result);
+		return ResponseVo.success(result);
+	}
+
+	/**
+	 * 订单id
+	 * 
+	 * @author samson
+	 * @createTime 2016年11月12日 下午4:40:06
+	 * @param id
+	 * @return
+	 */
+	@RequestMapping("alipayPaySuccess")
+	public ResponseVo alipayPaySuccess(@RequestBody Map<String, Object> params) {
+		String result = com.slfinance.redpack.common.utils.MapUtil.getString(params, "result");
+		// 数据组装
+		AppPayOrderResponse appPayOrderResonse = getAppPayOrderResponse(result);
+		// 数据保存
+		appPayOrderResponseService.save(appPayOrderResonse);
+		// 数据校验
+		alipayService.checkAppPayOrderResponse(appPayOrderResonse);
+		// 结账
+		accountService.orderSettle(orderService.findOne(appPayOrderResonse.getOut_trade_no()));
+		return ResponseVo.success();
+	}
+
+	private String error = "error";
+	private String success = "success";
+
+	/**
+	 * alipay异步回调
+	 * 
+	 * <pre>
+	 * 数据校验：
+	 * 	1、商户需要验证该通知数据中的out_trade_no是否为商户系统中创建的订单号
+	 * 	2、判断total_amount是否确实为该订单的实际金额（即商户订单创建时的金额）
+	 * 	3、校验通知中的seller_id（或者seller_email) 是否为out_trade_no这笔单据的对应的操作方（有的时候，一个商户可能有多个seller_id/seller_email）
+	 * 	4、验证app_id是否为该商户本身
+	 * 	上述1、2、3、4有任何一个验证不通过，则表明本次通知是异常通知，务必忽略
+	 * 	注：在上述验证通过后商户必须根据支付宝不同类型的业务通知，正确的进行不同的业务处理，并且过滤重复的通知结果数据。在支付宝的业务通知中，只有交易通知状态为TRADE_SUCCESS或TRADE_FINISHED时，支付宝才会认定为买家付款成功
+	 * </pre>
+	 * 
+	 * 
+	 * @author samson
+	 * @createTime 2016年11月15日 下午3:40:36
+	 * @param params
+	 * @return
+	 */
+	@RequestMapping("alipayNotify")
+	public String notify(HttpServletRequest request) {
+		Map<String, String[]> parameterMap = request.getParameterMap();
+		Map<String, String> params = Maps.newHashMap();
+		for (String key : parameterMap.keySet()) {
+			params.put(key, (parameterMap.get(key) != null && parameterMap.get(key).length > 0) ? parameterMap.get(key)[0] : "");
+		}
+		try {
+			if (AlipaySignature.rsaCheckV1(params, AlipayServiceEnvConstants.ALIPAY_PUBLIC_KEY, AlipayServiceEnvConstants.CHARSET)) {
+				AppAlipayNotify appAlipayNotify = new AppAlipayNotify();
+				try {
+					// 数据组装
+					BeanUtils.populate(appAlipayNotify, params);
+					String inputString = JSON.toJSONString(params);
+					appAlipayNotify.setOrigin_data(inputString);
+					logger.info("alipay notify input String :{}", inputString);
+
+					// 数据入库
+					appAlipayNotifyService.save(appAlipayNotify);
+
+					// 校验
+					if (!StringUtil.equals(appAlipayNotify.getApp_id(), AlipayServiceEnvConstants.APP_ID)) {
+						logger.error("alipay notify app_id is not correct：{}", inputString);
+						return error;
+					}
+					Order order = orderService.findOne(appAlipayNotify.getOut_trade_no());
+					if (order == null) {
+						logger.error("alipay notify order not exists：{}", inputString);
+						return error;
+					} else if (order.getOrderStatus() == OrderStatus.成功) {
+						return success;
+					} else if (order.getOrderAmount() != appAlipayNotify.getTotal_amount()) {
+						logger.error("alipay notify total amount not equal：{}", inputString);
+						return error;
+					} else if (order.getOrderAmount() != appAlipayNotify.getTotal_amount()) {
+						logger.info("alipay notify order is success：{}", inputString);
+						return error;
+					}
+
+					if (!("TRADE_SUCCESS".equals(appAlipayNotify.getTrade_status()) || "TRADE_FINISHED".equals(appAlipayNotify.getTrade_status()))) {
+						logger.info("alipay notify trade_status not match：{}", inputString);
+						return error;
+					}
+
+					// 结账
+					accountService.orderSettle(order);
+				} catch (Exception e) {
+					return error;
+				}
+			} else {
+				return error;
+			}
+		} catch (AlipayApiException e1) {
+			logger.error("alipay rsa check failure :{}", params);
+			return error;
+		}
+		return success;
+	}
+
+	/**
+	 * 校验手机支付同步返回结果
+	 * 
+	 * @see https
+	 *      ://doc.open.alipay.com/docs/doc.htm?spm=a219a.7629140.0.0.mSZQrn
+	 *      &treeId=193&articleId=105302&docType=1
+	 * 
+	 * @serialData String oo =
+	 *             "{\"alipay_trade_app_pay_response\":{\"code\":\"10000\",\"msg\":\"Success\",\"app_id\":\"2014072300007148\",\"out_trade_no\":\"081622560194853\",\"trade_no\":\"2016081621001004400236957647\",\"total_amount\":\"0.01\",\"seller_id\":\"2088702849871851\",\"charset\":\"utf-8\",\"timestamp\":\"2016-10-1117:43:36\"},\"sign\":\"NGfStJf3i3ooWBuCDIQSumOpaGBcQz+aoAqyGh3W6EqA/gmyPYwLJ2REFijY9XPTApI9YglZyMw+ZMhd3kb0mh4RAXMrb6mekX4Zu8Nf6geOwIa9kLOnw0IMCjxi4abDIfXhxrXyj********\",\"sign_type\":\"RSA\"}"
+	 *             ;
+	 * @author samson
+	 * @createTime 2016年11月12日 下午2:32:58
+	 * @param result
+	 * @return
+	 */
+	private AppPayOrderResponse getAppPayOrderResponse(String result) {
+		if (result == null) {
+			throw new SLException("111111", "支付宝同步返回结果错误");
+		}
+		AppPayOrderResponse oneLevel = JSON.parseObject(result, AppPayOrderResponse.class, Feature.OrderedField);
+		AppPayOrderResponse twoLevel = JSON.parseObject(oneLevel.getAlipay_trade_app_pay_response(), AppPayOrderResponse.class, Feature.OrderedField);
+		twoLevel.setAlipay_trade_app_pay_response(oneLevel.getAlipay_trade_app_pay_response());
+		twoLevel.setSign(oneLevel.getSign());
+		twoLevel.setSign_type(oneLevel.getSign_type());
+		twoLevel.setOrigin_data(result);
+		return twoLevel;
+	}
+}

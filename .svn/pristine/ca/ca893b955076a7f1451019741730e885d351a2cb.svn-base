@@ -1,0 +1,81 @@
+server.port=8084
+
+# LOGGING
+logging.file=logs/spring.log
+logging.level.root=INFO
+
+
+spring.redis.host=192.16.150.103
+spring.redis.password=
+spring.redis.port=6379
+#redis cache's names
+spring.redis.cache.names=entity,session,test1,test2
+#redis cache name's expire,unit is seconds
+spring.redis.cache.expires=3600,1800,10,60
+#redis cache's default expire,unit is seconds
+spring.redis.cache.getDefaultExpireTime = 10
+
+
+
+
+# JPA (JpaBaseConfiguration, HibernateJpaAutoConfiguration)
+spring.jpa.generate-ddl=false
+spring.jpa.hibernate.ddl-auto=none
+spring.jpa.show-sql=true
+spring.jpa.open-in-view=false
+
+
+#Spring DATASOUCE
+druid.datasource.url= jdbc\:oracle\:thin\:@192.16.150.252\:1521\:pressDB
+druid.datasource.username=redpacket
+druid.datasource.password=redpacket
+druid.datasource.min-idle=5
+druid.datasource.max-active=10
+druid.datasource.initial-size=5
+druid.datasource.filters=stat,slf4j
+
+
+
+# DAO (PersistenceExceptionTranslationAutoConfiguration)
+spring.dao.exceptiontranslation.enabled=true
+
+
+#code message error configuration(ErrorCodeConfig)
+error.code.fileName=code_message
+
+
+#SMS Client config
+sms.client.serverUrl=http://nqxt.hl95001.com/SHHL95/qxtinterface.aspx
+#\u9a8c\u8bc1\u8d26\u6237
+sms.client.user1=jidish
+sms.client.pwd1=jidi123
+#\u63a8\u5e7f\u8d26\u6237
+sms.client.user2=usertest1
+sms.client.pwd2=test123123
+#\u6bcf\u4e2a\u624b\u673a\u6bcf\u5929\u6700\u591a\u53d1\u9001\u624b\u673a\u6761\u6570
+sms.client.onePhoneMaxSendPerDay=50
+sms.client.contentTemplate.register=\u6CE8\u518C\u9A8C\u8BC1\u7801\u662F\uFF1A%s
+sms.client.contentTemplate.resetPassword=\u627E\u56DE\u5BC6\u7801\u9A8C\u8BC1\u7801\u4E3A\uFF1A%s
+sms.client.contentTemplate.transactionPassword=\u4EA4\u6613\u5BC6\u7801\u627E\u56DE%s
+sms.client.maxInactiveInterval=1800000
+
+thread.pool.corePoolSize=5
+thread.pool.maxPoolSize=10
+thread.pool.queueCapacity=10
+
+#app push
+jpush.appKey=e6e763dd7dd15a010a618120
+jpush.masterSecret=c50b17244463aa7535f381f2
+jpush.apnsProduction=false
+#\u901a\u77e5\u5185\u5bb9
+jpush.notification.redpackAppointment.alert=\u60A8\u9884\u7EA6\u7684%s\u70B9%s\u5206\u7EA2\u5305\u4E09\u5206\u949F\u540E\u5F00\u542F\uFF0C\u5FEB\u53BB\u62A2\uFF01
+#\u901a\u77e5\u6807\u9898
+jpush.notification.redpackAppointment.title=\u7EA2\u5305\u9884\u7EA6
+
+staticResourceProxyURI : http://192.16.2.48:80
+#staticResourceProxyURI : http://localhost:80
+
+#\u57df\u540d
+domainName : www.baidu.com
+maxFileSize : 5
+  

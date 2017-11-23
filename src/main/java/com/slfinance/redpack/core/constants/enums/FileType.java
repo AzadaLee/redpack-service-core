@@ -1,0 +1,5 @@
+package com.slfinance.redpack.core.constants.enums;
+
+public enum FileType {
+	PICTURE, VIDEO, PDF// PICTURE(图片)、VIDEO(视频)、PDF(PDF文档)
+}

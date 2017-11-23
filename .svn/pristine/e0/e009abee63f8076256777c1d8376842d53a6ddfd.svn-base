@@ -1,0 +1,57 @@
+/** 
+ * @(#)UploadController.java 1.0.0 2016年11月8日 下午2:57:11  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.controller;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.slfinance.redpack.core.constants.enums.UserType;
+import com.slfinance.redpack.core.controller.base.BaseController;
+import com.slfinance.redpack.core.entities.File;
+import com.slfinance.redpack.core.response.ResponseVo;
+import com.slfinance.redpack.core.services.FileService;
+import com.slfinance.redpack.core.vo.FileUploadVo;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月8日 下午2:57:11 $
+ */
+@RestController
+@RequestMapping(value = "upload", method = RequestMethod.POST)
+public class UploadController extends BaseController {
+
+	@Autowired
+	private FileService fileService;
+
+	@RequestMapping("/save")
+	public ResponseVo save(@RequestBody @Validated List<FileUploadVo> fileUploadVoList) {
+		Map<String, Object> result = new HashMap<String, Object>();
+		List<Map<String, Object>> fileList = new ArrayList<Map<String, Object>>();
+		for (FileUploadVo fileUploadVo : fileUploadVoList) {
+			Map<String, Object> resultMap = new HashMap<String, Object>();
+			File f = fileService.save(fileUploadVo, UserType.客户);
+			resultMap.put("path", f.getPath());
+			File file = (File) fileService.doPathAndLogo(staticResourceProxyURI, null, f);
+			resultMap.put("id", file.getId());
+			resultMap.put("pathURL", file.getPath());
+			fileList.add(resultMap);
+		}
+		result.put("data", fileList);
+		return ResponseVo.success(result);
+	}
+}

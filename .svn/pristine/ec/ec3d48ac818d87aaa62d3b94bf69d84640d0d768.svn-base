@@ -1,0 +1,32 @@
+/** 
+ * @(#)MessageRepository.java 1.0.0 2016年11月1日 下午5:51:23  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.repositories;
+
+import com.slfinance.redpack.core.entities.Message;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+
+/**
+ * 
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月1日 下午5:51:23 $
+ */
+public interface MessageRepository extends BaseRepository<Message> {
+
+	/**
+	 * 
+	 * 根据是否已读统计个数
+	 * 
+	 * 1:已读 0:未读
+	 * @author work
+	 * @createTime 2016年11月1日 下午6:17:32
+	 * @param isRead
+	 * @return
+	 */
+	Long countByCustomerIdAndIsRead(String customerId, int isRead);
+
+}

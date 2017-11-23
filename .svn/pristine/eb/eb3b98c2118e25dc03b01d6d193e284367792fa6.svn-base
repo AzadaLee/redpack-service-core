@@ -1,0 +1,51 @@
+/** 
+ * @(#)AdvertisementPhotoService.java 1.0.0 2016年7月26日 上午9:48:07  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */
+
+package com.slfinance.redpack.core.services;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.core.entities.AdvertisementPhoto;
+import com.slfinance.redpack.core.repositories.AdvertisementPhotoRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+/**
+ * 广告图片
+ * 
+ * @author SangLy
+ * @version $Revision:1.0.0, $Date: 2016年7月26日 上午9:48:07 $
+ */
+@Service
+public class AdvertisementPhotoService extends BaseService<AdvertisementPhoto, AdvertisementPhotoRepository> {
+
+	@Transactional
+	public void saveAdvertisementPhoto(List<Map<String, String>> advertisementPhotos,String advertisementId) {
+		//先删除,再保存
+		List<Map<String,Object>> paths = findPathsByAdvertisementId(advertisementId);
+		if(paths != null && paths.size() > 0){
+			repository.deleteByAdvertisementId(advertisementId);
+		}
+		
+		List<AdvertisementPhoto> advertisementPhotosPO = new ArrayList<AdvertisementPhoto>();
+		for(Map<String, String> a : advertisementPhotos){
+			AdvertisementPhoto advertisementPhoto = new AdvertisementPhoto();
+			advertisementPhoto.setAdvertisementId(advertisementId);
+			advertisementPhoto.setPath(a.get("path"));
+			advertisementPhotosPO.add(advertisementPhoto);
+		}
+		repository.save(advertisementPhotosPO);
+	}
+
+	public List<Map<String,Object>> findPathsByAdvertisementId(String advertisementId) {
+		return repository.findPathsByAdvertisementId(advertisementId);
+	}
+
+}

@@ -1,0 +1,35 @@
+package com.slfinance.redpack.core.repositories;
+
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.data.jpa.repository.Query;
+
+import com.slfinance.redpack.core.entities.Account;
+import com.slfinance.redpack.core.extend.jpa.page.PageRequestVo;
+import com.slfinance.redpack.core.extend.jpa.page.PageResponse;
+import com.slfinance.redpack.core.extend.jpa.page.QueryExtend;
+import com.slfinance.redpack.core.repositories.base.BaseRepository;
+import com.slfinance.redpack.core.vo.AccountFlowExportVo;
+
+public interface AccountRepository extends BaseRepository<Account> {
+
+	public Account findByCustomerId(String customerId);
+
+	@QueryExtend
+	@Query(nativeQuery=true,value="select t.id,t.amount,t.withdraw_code,t.customer_id,t.created_date,t.status,t.memo,b.bank_name,b.bank_code,b.card_holder_name,b.province||b.city \"location\",a.available_amount,c.mobile from rp_t_withdraw t left join rp_t_bank b on b.id = t.bank_id left join rp_t_account a on t.customer_id = a.customer_id left join rp_t_customer c on c.id = t.customer_id where ?(c.mobile = :mobile)? and ?(t.status = :status)? and ?(trunc(t.created_date)) >= to_date(:startDate, 'yyyy-mm-dd')? and ?(trunc(t.created_date)) <= to_date(:endDate, 'yyyy-mm-dd') ? order by t.created_date desc")
+	public PageResponse<Map<String, Object>> withdrawList(PageRequestVo pageRequest);
+
+	@QueryExtend
+	@Query(nativeQuery=true,value="select f.flow_code,f.flow_type,decode(f.trade_direction,'收入','+'||f.trade_amount,'支出','-'||f.trade_amount,trade_amount) trade_amount,f.memo,f.created_date,a.available_amount,a.account_code,c.mobile from rp_t_account_flow f left join rp_t_account a on a.id = f.account_id left join rp_t_customer c on c.id = a.customer_id where ?(f.flow_type = :flowType)? and ?(f.trade_direction = :tradeDirection)? and ?(c.mobile = :mobile)? and ?(a.account_type = :accountType)? and ?(trunc(f.created_date)) >= to_date(:startDate, 'yyyy-mm-dd')? and ?(trunc(f.created_date)) <= to_date(:endDate, 'yyyy-mm-dd') ? order by f.created_date desc")
+	public PageResponse<Map<String, Object>> flowList(PageRequestVo pageRequest);
+
+	@QueryExtend
+	@Query(nativeQuery=true,value="select f.flow_code,f.flow_type,f.trade_amount,f.memo,f.created_date,a.available_amount,a.account_code,c.mobile from rp_t_account_flow f left join rp_t_account a on a.id = f.account_id left join rp_t_customer c on c.id = a.customer_id where ?(f.flow_type = :flowType)? and ?(f.trade_direction = :tradeDirection)? and ?(c.mobile = :mobile)? and ?(a.account_type =:accountType)? and ?(trunc(f.created_date)) >= to_date(:startDate, 'yyyy-mm-dd')? and ?(trunc(f.created_date)) <= to_date(:endDate, 'yyyy-mm-dd') ? order by f.created_date desc")
+	public List<Map<String, Object>> flowExport(AccountFlowExportVo accountFlowExportVo);
+
+	Account findBycustomerId(String customerId);
+	
+	Account findFirstByAccountCode(String accountCode);
+
+}

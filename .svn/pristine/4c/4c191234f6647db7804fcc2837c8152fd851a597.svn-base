@@ -1,0 +1,84 @@
+/** 
+ * @(#)DistributeService.java 1.0.0 2016年11月2日 上午11:32:16  
+ *  
+ * Copyright © 2016 善林金融.  All rights reserved.  
+ */ 
+
+package com.slfinance.redpack.core.services;
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.slfinance.redpack.common.utils.DateUtil;
+import com.slfinance.redpack.core.constants.enums.RedpackStatus;
+import com.slfinance.redpack.core.entities.Distribute;
+import com.slfinance.redpack.core.entities.RedPack;
+import com.slfinance.redpack.core.exception.SLException;
+import com.slfinance.redpack.core.repositories.DistributeRepository;
+import com.slfinance.redpack.core.services.base.BaseService;
+
+/**   
+ * 
+ *  
+ * @author  SangLy
+ * @version $Revision:1.0.0, $Date: 2016年11月2日 上午11:32:16 $ 
+ */
+@Service
+public class DistributeService extends BaseService <Distribute, DistributeRepository>{
+	
+	@Autowired
+	private RedPackService redPackService;
+	
+	/**
+	 * 用户抢红包
+	 * 
+	 * @author SangLy
+	 * @createTime 2016年11月7日 下午6:36:20
+	 * @param redpackId
+	 * @param customerId
+	 */
+	@Transactional
+	public Map<String,Object> robRedPack(String redpackId,String customerId) throws SLException{
+		return synDistributeMethod(redpackId,customerId);
+	}
+	//status 0 ：抢到1：已经抢到过不能重复抢2 红包已经被抢光
+	public synchronized Map<String,Object> synDistributeMethod(String redpackId, String customerId) {
+		Map<String,Object> result = new HashMap<String,Object>();
+		//查询用户是否已经抢此过红包
+		List<Distribute> listDistributeById = repository.findByAssigneeAndRedpackId(customerId, redpackId); 
+		if(listDistributeById.size() > 0){
+			result.put("status", "1");
+			return result;
+		}
+		// 根据红包id查询最近一条应未分配记录
+		Distribute notDistribute = repository.findByAssigneeIsNullAndRedpackIdAndCreatedDateGreaterThanEqualOrderByOrderedAsc(DateUtil.weedDayBelow(new Date()), redpackId);
+		if (notDistribute != null) {
+			notDistribute.setAssignee(customerId);
+			notDistribute.setDistributeTime(new Date());
+			Distribute newDistribute = repository.save(notDistribute);
+			result.put("status", "0");
+			result.put("distribute", newDistribute);
+			return result;
+		} else {
+			// 修改红包状态为已经抢光
+			RedPack redPack = redPackService.findOne(redpackId);
+			if(redPack != null){
+				redPack.setStatus(RedpackStatus.已抢完);
+				redPackService.save(redPack);
+			}
+			result.put("status", "2");
+			return result;
+		}
+	}
+	
+	//查询用户是否已经抢此过红包
+	public List<Distribute> findByAssigneeAndRedpackId(String customerId, String redpackId) {
+		return repository.findByAssigneeAndRedpackId(customerId, redpackId);
+	}
+}
